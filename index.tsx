@@ -622,7 +622,7 @@ const ProjectCard = ({ project, language, onVideoClick, onProjectClick }: { proj
     const displayImage = imageUrl || languageLogos[primaryLanguage] || 'https://via.placeholder.com/400x225/374151/9CA3AF?text=No+Image';
 
     return (
-        <div 
+        <div
             className="flex flex-col gap-4 bg-gray-800 border border-gray-700 rounded-lg p-6 group transition-all duration-300 hover:border-blue-500 hover:shadow-2xl hover:shadow-blue-500/20 hover:-translate-y-1 cursor-pointer"
             onClick={handleProjectClick}
         >
@@ -726,10 +726,10 @@ const Projects = ({ language }) => {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {projects.map(project => (
-                        <ProjectCard 
-                            key={project.title.en} 
-                            project={project} 
-                            language={language} 
+                        <ProjectCard
+                            key={project.title.en}
+                            project={project}
+                            language={language}
                             onVideoClick={handleVideoClick}
                             onProjectClick={handleProjectClick}
                         />
