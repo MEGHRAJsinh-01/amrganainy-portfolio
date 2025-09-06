@@ -1,6 +1,176 @@
 import React, { StrictMode, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
+// --- GitHub API Service ---
+const GITHUB_USERNAME = 'ganainy';
+const CACHE_KEY = 'github_projects_cache';
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+
+// --- Admin Panel Data ---
+const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123'; // Fallback for development
+const VISIBILITY_KEY = 'project_visibility_settings';
+
+// Featured repositories that should be treated as manual projects
+const FEATURED_REPOS = [
+    'appium-traverser',
+    'captive-portal-analyzer-kotlin',
+    'raspberrypi-captive-portal',
+    'job-app-assistant',
+    'Our_chat',
+    'gym_masters_kotlin_compose',
+    'realtime_quizzes',
+    'Reminderly'
+];
+
+interface GitHubRepo {
+    id: number;
+    name: string;
+    description: string | null;
+    html_url: string;
+    language: string | null;
+    topics: string[];
+    pushed_at: string;
+    fork: boolean;
+    private: boolean;
+    stargazers_count: number;
+    forks_count: number;
+}
+
+interface CachedData {
+    data: GitHubRepo[];
+    timestamp: number;
+}
+
+const fetchGitHubRepos = async (): Promise<GitHubRepo[]> => {
+    try {
+        const response = await fetch(`https://api.github.com/users/${GITHUB_USERNAME}/repos?sort=pushed&per_page=100`);
+        if (!response.ok) {
+            throw new Error(`GitHub API error: ${response.status}`);
+        }
+        return await response.json();
+    } catch (error) {
+        console.error('Error fetching GitHub repos:', error);
+        throw error;
+    }
+};
+
+const getCachedRepos = (): GitHubRepo[] | null => {
+    try {
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (!cached) return null;
+
+        const parsed: CachedData = JSON.parse(cached);
+        const now = Date.now();
+
+        if (now - parsed.timestamp > CACHE_DURATION) {
+            localStorage.removeItem(CACHE_KEY);
+            return null;
+        }
+
+        return parsed.data;
+    } catch (error) {
+        console.error('Error reading cache:', error);
+        return null;
+    }
+};
+
+const setCachedRepos = (repos: GitHubRepo[]): void => {
+    try {
+        const cacheData: CachedData = {
+            data: repos,
+            timestamp: Date.now()
+        };
+        localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+    } catch (error) {
+        console.error('Error setting cache:', error);
+    }
+};
+
+const clearGitHubCache = () => {
+    try {
+        localStorage.removeItem(CACHE_KEY);
+        console.log('GitHub cache cleared successfully');
+        return true;
+    } catch (error) {
+        console.error('Error clearing GitHub cache:', error);
+        return false;
+    }
+};
+
+const transformGitHubRepoToProject = (repo: GitHubRepo, language: string) => {
+    // Filter out repos we don't want to show
+    if (repo.fork || repo.private || repo.name.toLowerCase().includes('fork')) {
+        return null;
+    }
+
+    // Check admin visibility settings
+    if (!isProjectVisible(repo.name)) {
+        return null;
+    }
+
+    // Check if this is a featured repository
+    const isFeatured = FEATURED_REPOS.includes(repo.name);
+
+    // Parse custom data from repo description for featured repos
+    let customData = {};
+    if (isFeatured) {
+        const videoMatch = repo.description?.match(/https:\/\/www\.youtube\.com\/watch\?v=[\w-]+/);
+        if (videoMatch) {
+            customData = { videoUrl: videoMatch[0] };
+        }
+    }
+
+    // Use GitHub data directly (enhanced descriptions and tags are now stored in GitHub)
+    let title, description, tags;
+    if (isFeatured) {
+        title = {
+            en: repo.name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+            de: repo.name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+        };
+        description = {
+            en: repo.description || `A ${repo.language || 'software'} project`,
+            de: repo.description || `Ein ${repo.language || 'Software'} Projekt`
+        };
+        // Use topics from GitHub (these are now the enhanced tags)
+        tags = repo.topics && repo.topics.length > 0 ? repo.topics : [repo.language || 'Project'];
+    } else {
+        // Generate tags from language and topics
+        const generatedTags: string[] = [];
+        if (repo.language) {
+            generatedTags.push(repo.language);
+        }
+        if (repo.topics && repo.topics.length > 0) {
+            generatedTags.push(...repo.topics.slice(0, 3)); // Limit to 3 additional topics
+        }
+
+        // Create bilingual title and description
+        title = {
+            en: repo.name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+            de: repo.name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+        };
+
+        description = {
+            en: repo.description || `A ${repo.language || 'software'} project`,
+            de: repo.description || `Ein ${repo.language || 'Software'} Projekt`
+        };
+
+        tags = generatedTags.length > 0 ? generatedTags : ['Project'];
+    }
+
+    return {
+        title,
+        description,
+        tags: tags.length > 0 ? tags : ['Project'],
+        liveUrl: '#',
+        repoUrl: repo.html_url,
+        lastUpdated: repo.pushed_at,
+        stars: repo.stargazers_count,
+        forks: repo.forks_count,
+        isFeatured,
+        ...customData // Add custom data like videoUrl for featured repos
+    };
+};
+
 // --- Translations ---
 const translations = {
     en: {
@@ -111,125 +281,6 @@ const skills = [
     'AI/ML', 'Appium', 'Security Analysis', 'Privacy Evaluation'
 ];
 
-const projects = [
-    {
-        title: {
-            en: "AI Android App Crawler",
-            de: "KI-Android-App-Crawler"
-        },
-        description: {
-            en: "AI-driven Android application crawler using Google Gemini to intelligently explore app screens, analyze visual layouts, and make decisions for discovering new app states and interactions.",
-            de: "KI-gesteuerter Android-Anwendungscrawler mit Google Gemini zur intelligenten Erkundung von App-Bildschirmen, Analyse visueller Layouts und Entscheidungsfindung für die Entdeckung neuer App-Zustände und Interaktionen."
-        },
-        tags: ["Python", "AI", "Android", "Appium"],
-        liveUrl: "#",
-        repoUrl: "https://github.com/ganainy/appium-traverser",
-        lastUpdated: "2025-09-03T13:06:21Z"
-    },
-    {
-        title: {
-            en: "Captive Portal Analyzer",
-            de: "Captive Portal Analyzer"
-        },
-        description: {
-            en: "Kotlin application that analyzes captive portals by capturing and analyzing requests, headers, files and screenshots. Uses AI to evaluate data collection practices and privacy policies.",
-            de: "Kotlin-Anwendung zur Analyse von Captive Portals durch Erfassung und Analyse von Anfragen, Headern, Dateien und Screenshots. Verwendet KI zur Bewertung von Datensammelpraktiken und Datenschutzrichtlinien."
-        },
-        videoUrl: "https://www.youtube.com/watch?v=PmHeJZrM6Co",
-        tags: ["Kotlin", "AI", "Security", "Privacy"],
-        liveUrl: "#",
-        repoUrl: "https://github.com/ganainy/captive-portal-analyzer-kotlin",
-        lastUpdated: "2025-09-03T13:06:21Z"
-    },
-    {
-        title: {
-            en: "Raspberry Pi Captive Portal",
-            de: "Raspberry Pi Captive Portal"
-        },
-        description: {
-            en: "A Raspberry Pi-based captive portal system for network authentication and user management with web interface.",
-            de: "Ein Raspberry Pi-basiertes Captive Portal System für Netzwerk-Authentifizierung und Benutzerverwaltung mit Weboberfläche."
-        },
-        tags: ["Python", "Raspberry Pi", "Networking", "Security"],
-        liveUrl: "#",
-        repoUrl: "https://github.com/ganainy/raspberrypi-captive-portal",
-        lastUpdated: "2025-05-05T16:39:53Z"
-    },
-    {
-        title: {
-            en: "Job Application Assistant",
-            de: "Bewerbungsassistent"
-        },
-        description: {
-            en: "TypeScript-based job application assistant that helps streamline the job search process with intelligent resume parsing, job matching algorithms, and application tracking features.",
-            de: "TypeScript-basierter Bewerbungsassistent, der den Bewerbungsprozess mit intelligenter Lebenslauf-Analyse, Job-Matching-Algorithmen und Bewerbungsverfolgungsfunktionen optimiert."
-        },
-        tags: ["TypeScript", "AI", "Job Search"],
-        liveUrl: "#",
-        repoUrl: "https://github.com/ganainy/job-app-assistant",
-        lastUpdated: "2025-04-30T20:44:16Z"
-    },
-    {
-        title: {
-            en: "Our Chat",
-            de: "Our Chat"
-        },
-        description: {
-            en: "Development of a Kotlin chat app with real-time notifications and support for audio messages, image and file sharing.",
-            de: "Entwicklung einer Kotlin-Chat-App mit Echtzeit-Benachrichtigungen und Unterstützung für Audionachrichten, Bild- und Dateifreigabe."
-        },
-        videoUrl: "https://www.youtube.com/watch?v=X9PzUzBMOl8",
-        tags: ["Kotlin", "Android", "Firebase", "Real-time"],
-        liveUrl: "#",
-        repoUrl: "https://github.com/ganainy/Our_chat",
-        lastUpdated: "2025-04-29T19:33:27Z"
-    },
-    {
-        title: {
-            en: "Gym Masters",
-            de: "Gym Masters"
-        },
-        description: {
-            en: "Development of a Java app for sharing workouts and exercises with followers and friends, using Firebase.",
-            de: "Entwicklung einer Java-App zum Teilen von Workouts und Exercises mit Followern und Freunden, unter Nutzung von Firebase."
-        },
-        videoUrl: "https://www.youtube.com/watch?v=JitaH3K0fcM",
-        tags: ["Java", "Android", "Firebase"],
-        liveUrl: "#",
-        repoUrl: "https://github.com/ganainy/gym_masters_kotlin_compose",
-        lastUpdated: "2025-04-29T19:06:48Z"
-    },
-    {
-        title: {
-            en: "Realtime Quizzes",
-            de: "Realtime Quizzes"
-        },
-        description: {
-            en: "Development of a Flutter app for online quiz competitions with other players.",
-            de: "Entwicklung einer Flutter-App für Online-Quizwettbewerbe mit anderen Spielern."
-        },
-        tags: ["Flutter", "Dart", "Real-time", "Multiplayer"],
-        liveUrl: "#",
-        repoUrl: "https://github.com/ganainy/realtime_quizzes",
-        lastUpdated: "2022-05-19T20:28:28Z"
-    },
-    {
-        title: {
-            en: "Reminderly",
-            de: "Reminderly"
-        },
-        description: {
-            en: "Development of a Kotlin app for setting alarms/reminders with support for localization and dark mode, using WorkManager.",
-            de: "Entwicklung einer Kotlin-App zum Einstellen von Alarmen/Erinnerungen mit Unterstützung für Lokalisierung und Darkmode, unter Nutzung von WorkManager."
-        },
-        videoUrl: "https://www.youtube.com/watch?v=Dl6z5eDK3LE",
-        tags: ["Kotlin", "Android", "WorkManager", "Localization"],
-        liveUrl: "#",
-        repoUrl: "https://github.com/ganainy/Reminderly",
-        lastUpdated: "2022-05-06T21:00:27Z"
-    }
-];
-
 // --- Components ---
 
 const Header = ({ language, setLanguage }) => (
@@ -299,7 +350,7 @@ const VideoModal = ({ isOpen, onClose, videoUrl, title, language }) => {
 const ProjectDetailModal = ({ isOpen, onClose, project, language, onVideoClick }) => {
     if (!isOpen || !project) return null;
 
-    const { title, description, imageUrl, videoUrl, tags, liveUrl, repoUrl, lastUpdated } = project;
+    const { title, description, imageUrl, videoUrl, tags, liveUrl, repoUrl, lastUpdated, stars, forks } = project;
 
     const handleLiveDemoClick = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -381,7 +432,23 @@ const ProjectDetailModal = ({ isOpen, onClose, project, language, onVideoClick }
                 {/* Project Details */}
                 <div className="p-8">
                     <div className="flex items-start justify-between mb-4">
-                        <h2 className="text-white text-3xl font-bold">{title[language]}</h2>
+                        <div className="flex items-center gap-3">
+                            <h2 className="text-white text-3xl font-bold">{title[language]}</h2>
+                            <div className="flex items-center gap-2">
+                                {stars > 0 && (
+                                    <div className="flex items-center gap-1 bg-yellow-600/20 text-yellow-400 text-lg font-semibold px-3 py-1 rounded-full border border-yellow-600/30">
+                                        <span className="material-symbols-outlined">star</span>
+                                        <span>{stars}</span>
+                                    </div>
+                                )}
+                                {forks > 0 && (
+                                    <div className="flex items-center gap-1 bg-blue-600/20 text-blue-400 text-lg font-semibold px-3 py-1 rounded-full border border-blue-600/30">
+                                        <span className="material-symbols-outlined">fork_right</span>
+                                        <span>{forks}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                         {lastUpdated && (
                             <span className="text-gray-400 text-sm font-medium whitespace-nowrap ml-4">
                                 {formatDate(lastUpdated)}
@@ -559,7 +626,7 @@ const About = ({ language }) => (
 );
 
 const ProjectCard = ({ project, language, onVideoClick, onProjectClick }: { project: any; language: string; onVideoClick?: (videoUrl: string, title: any) => void; onProjectClick?: (project: any) => void; key?: string }) => {
-    const { title, description, imageUrl, videoUrl, tags, liveUrl, repoUrl, lastUpdated } = project;
+    const { title, description, imageUrl, videoUrl, tags, liveUrl, repoUrl, lastUpdated, stars, forks } = project;
 
     const handleLiveDemoClick = (e: React.MouseEvent) => {
         e.stopPropagation(); // Prevent triggering project click
@@ -639,7 +706,23 @@ const ProjectCard = ({ project, language, onVideoClick, onProjectClick }: { proj
                 )}
             </div>
             <div className="flex flex-col flex-1">
-                <h3 className="text-white text-xl font-bold leading-normal mb-2">{title[language]}</h3>
+                <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-white text-xl font-bold leading-normal flex-1 truncate mr-2">{title[language]}</h3>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                        {stars > 0 && (
+                            <div className="flex items-center gap-1 bg-yellow-600/20 text-yellow-400 text-sm font-semibold px-2 py-1 rounded-full border border-yellow-600/30">
+                                <span className="material-symbols-outlined text-sm">star</span>
+                                <span>{stars}</span>
+                            </div>
+                        )}
+                        {forks > 0 && (
+                            <div className="flex items-center gap-1 bg-blue-600/20 text-blue-400 text-sm font-semibold px-2 py-1 rounded-full border border-blue-600/30">
+                                <span className="material-symbols-outlined text-sm">fork_right</span>
+                                <span>{forks}</span>
+                            </div>
+                        )}
+                    </div>
+                </div>
                 <p className="text-gray-400 text-sm font-normal leading-relaxed flex-1">{description[language]}</p>
                 <div className="mt-4 flex flex-wrap gap-2">
                     {tags.map(tag => {
@@ -700,6 +783,9 @@ const ProjectCard = ({ project, language, onVideoClick, onProjectClick }: { proj
 const Projects = ({ language }) => {
     const [modalState, setModalState] = useState({ isOpen: false, videoUrl: '', title: { en: '', de: '' } });
     const [projectDetailState, setProjectDetailState] = useState({ isOpen: false, project: null });
+    const [dynamicProjects, setDynamicProjects] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState(null);
 
     const handleVideoClick = (videoUrl: string, title: any) => {
         setModalState({ isOpen: true, videoUrl, title });
@@ -717,6 +803,49 @@ const Projects = ({ language }) => {
         setProjectDetailState({ isOpen: false, project: null });
     };
 
+    React.useEffect(() => {
+        const loadProjects = async () => {
+            try {
+                setIsLoading(true);
+                setError(null);
+
+                // Try to get cached data first
+                let githubRepos = getCachedRepos();
+
+                if (!githubRepos) {
+                    // Fetch from GitHub API
+                    githubRepos = await fetchGitHubRepos();
+                    setCachedRepos(githubRepos);
+                }
+
+                // Transform GitHub repos to project format
+                const transformedProjects = githubRepos
+                    .map(repo => transformGitHubRepoToProject(repo, language))
+                    .filter(project => project !== null);
+
+                // Sort: featured projects first, then by last updated date
+                const sortedProjects = transformedProjects.sort((a, b) => {
+                    if (a.isFeatured && !b.isFeatured) return -1;
+                    if (!a.isFeatured && b.isFeatured) return 1;
+                    return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
+                });
+
+                setDynamicProjects(sortedProjects);
+            } catch (err) {
+                console.error('Error loading projects:', err);
+                setError(err.message);
+                setDynamicProjects([]);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadProjects();
+    }, [language]);
+
+    // Use dynamic projects as the main projects list
+    const allProjects = dynamicProjects;
+
     return (
         <section id="projects" className="py-20 px-4 bg-gray-900/50">
             <div className="max-w-7xl mx-auto">
@@ -724,17 +853,36 @@ const Projects = ({ language }) => {
                     <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tighter mb-4">{translations[language].projects.title}</h2>
                     <p className="max-w-2xl mx-auto text-lg text-gray-400">{translations[language].projects.subtitle}</p>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {projects.map(project => (
-                        <ProjectCard
-                            key={project.title.en}
-                            project={project}
-                            language={language}
-                            onVideoClick={handleVideoClick}
-                            onProjectClick={handleProjectClick}
-                        />
-                    ))}
-                </div>
+
+                {isLoading && (
+                    <div className="flex justify-center items-center py-20">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400"></div>
+                        <span className="ml-4 text-gray-400">Loading projects from GitHub...</span>
+                    </div>
+                )}
+
+                {error && (
+                    <div className="text-center py-10">
+                        <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-6 max-w-md mx-auto">
+                            <p className="text-red-400 mb-2">Failed to load GitHub projects</p>
+                            <p className="text-gray-400 text-sm">Showing manual projects only</p>
+                        </div>
+                    </div>
+                )}
+
+                {!isLoading && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        {allProjects.map(project => (
+                            <ProjectCard
+                                key={project.title?.en || project.repoUrl}
+                                project={project}
+                                language={language}
+                                onVideoClick={handleVideoClick}
+                                onProjectClick={handleProjectClick}
+                            />
+                        ))}
+                    </div>
+                )}
             </div>
 
             <VideoModal
@@ -755,8 +903,6 @@ const Projects = ({ language }) => {
         </section>
     );
 };
-
-
 const Contact = ({ language }) => (
     <section id="contact" className="py-20 px-4">
         <div className="max-w-7xl mx-auto">
@@ -816,14 +962,302 @@ const Contact = ({ language }) => (
 );
 
 
-const Footer = ({ language }) => (
-    <footer className="text-center py-8 border-t border-gray-800 bg-gray-900/50">
+const Footer = ({ language, showAdminLink, onAdminClick }) => (
+    <footer className="text-center py-8 border-t border-gray-800 bg-gray-900/50 relative">
         <p className="text-gray-400">{translations[language].footer.copyright.replace('{year}', new Date().getFullYear().toString()).replace('{name}', personalInfo.name)}</p>
+        {showAdminLink && (
+            <button
+                onClick={onAdminClick}
+                className="absolute bottom-2 right-4 text-xs text-gray-600 hover:text-gray-400 transition-colors underline"
+                title="Admin Panel (Ctrl+Shift+A to toggle)"
+            >
+                Admin
+            </button>
+        )}
     </footer>
 );
 
+// --- Admin Panel Functions ---
+const getVisibilitySettings = () => {
+    try {
+        const settings = localStorage.getItem(VISIBILITY_KEY);
+        return settings ? JSON.parse(settings) : {};
+    } catch (error) {
+        console.error('Error reading visibility settings:', error);
+        return {};
+    }
+};
+
+const saveVisibilitySettings = (settings: { [key: string]: boolean }) => {
+    try {
+        localStorage.setItem(VISIBILITY_KEY, JSON.stringify(settings));
+    } catch (error) {
+        console.error('Error saving visibility settings:', error);
+    }
+};
+
+const isProjectVisible = (repoName: string) => {
+    const settings = getVisibilitySettings();
+    // If no setting exists, default to visible for featured repos, hidden for others
+    if (settings[repoName] === undefined) {
+        return FEATURED_REPOS.includes(repoName);
+    }
+    return settings[repoName];
+};
+
+// --- Admin Panel Component ---
+const AdminPanel = ({ onBackToPortfolio }) => {
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [password, setPassword] = useState('');
+    const [allRepos, setAllRepos] = useState([]);
+    const [visibilitySettings, setVisibilitySettings] = useState({});
+    const [isLoading, setIsLoading] = useState(false);
+
+    React.useEffect(() => {
+        if (isAuthenticated) {
+            loadAllRepos();
+        }
+    }, [isAuthenticated]);
+
+    const loadAllRepos = async () => {
+        setIsLoading(true);
+        try {
+            const response = await fetch(`https://api.github.com/users/${GITHUB_USERNAME}/repos?sort=pushed&per_page=100`);
+            if (!response.ok) {
+                throw new Error(`GitHub API error: ${response.status}`);
+            }
+            const repos = await response.json();
+
+            // Filter out forks and private repos
+            const filteredRepos = repos.filter((repo: GitHubRepo) =>
+                !repo.fork && !repo.private && !repo.name.toLowerCase().includes('fork')
+            );
+
+            setAllRepos(filteredRepos);
+            setVisibilitySettings(getVisibilitySettings());
+        } catch (error) {
+            console.error('Error loading repos:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleLogin = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (password === ADMIN_PASSWORD) {
+            setIsAuthenticated(true);
+        } else {
+            alert('Incorrect password');
+        }
+    };
+
+    const toggleVisibility = (repoName: string) => {
+        const newSettings = {
+            ...visibilitySettings,
+            [repoName]: !isProjectVisible(repoName)
+        };
+        setVisibilitySettings(newSettings);
+        saveVisibilitySettings(newSettings);
+    };
+
+    const handleLogout = () => {
+        setIsAuthenticated(false);
+        setPassword('');
+        onBackToPortfolio();
+    };
+
+    if (!isAuthenticated) {
+        return (
+            <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
+                <div className="bg-gray-800 p-8 rounded-lg shadow-2xl w-full max-w-md">
+                    <h2 className="text-2xl font-bold text-white mb-6 text-center">Admin Panel</h2>
+                    <form onSubmit={handleLogin}>
+                        <div className="mb-4">
+                            <label className="block text-gray-300 text-sm font-medium mb-2">
+                                Password
+                            </label>
+                            <input
+                                type="password"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:border-blue-500 focus:ring-blue-500"
+                                placeholder="Enter admin password"
+                                required
+                            />
+                        </div>
+                        <button
+                            type="submit"
+                            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors font-medium"
+                        >
+                            Login
+                        </button>
+                    </form>
+                    <button
+                        onClick={onBackToPortfolio}
+                        className="w-full mt-4 bg-gray-600 text-white py-2 px-4 rounded-md hover:bg-gray-700 transition-colors font-medium"
+                    >
+                        Back to Portfolio
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen bg-gray-900 text-white">
+            {/* Header */}
+            <header className="bg-gray-800 border-b border-gray-700 px-6 py-4">
+                <div className="flex justify-between items-center">
+                    <h1 className="text-2xl font-bold">Portfolio Admin Panel</h1>
+                    <div className="flex gap-4">
+                        <button
+                            onClick={() => {
+                                if (clearGitHubCache()) {
+                                    alert('GitHub cache cleared! The projects will reload with fresh data from GitHub.');
+                                    window.location.reload();
+                                }
+                            }}
+                            className="bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 transition-colors"
+                            title="Clear GitHub cache and reload fresh data"
+                        >
+                            Clear Cache
+                        </button>
+                        <button
+                            onClick={handleLogout}
+                            className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors"
+                        >
+                            Logout
+                        </button>
+                        <button
+                            onClick={onBackToPortfolio}
+                            className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                        >
+                            Back to Portfolio
+                        </button>
+                    </div>
+                </div>
+            </header>
+
+            {/* Main Content */}
+            <main className="px-6 py-8">
+                <div className="max-w-6xl mx-auto">
+                    <div className="mb-8">
+                        <h2 className="text-xl font-semibold mb-4">Project Visibility Control</h2>
+                        <p className="text-gray-400 mb-6">
+                            Control which of your GitHub repositories are displayed in the portfolio.
+                            Toggle visibility on/off for each project below.
+                        </p>
+                    </div>
+
+                    {isLoading ? (
+                        <div className="flex justify-center items-center py-20">
+                            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400"></div>
+                            <span className="ml-4 text-gray-400">Loading repositories...</span>
+                        </div>
+                    ) : (
+                        <div className="grid gap-4">
+                            {allRepos.map((repo: GitHubRepo) => {
+                                const isVisible = isProjectVisible(repo.name);
+                                const isFeatured = FEATURED_REPOS.includes(repo.name);
+
+                                return (
+                                    <div key={repo.id} className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex-1">
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <h3 className="text-lg font-semibold text-white">{repo.name}</h3>
+                                                    {isFeatured && (
+                                                        <span className="bg-yellow-600 text-yellow-100 text-xs px-2 py-1 rounded-full">
+                                                            Featured
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-gray-400 text-sm mb-3">{repo.description || 'No description'}</p>
+                                                <div className="flex items-center gap-4 text-sm text-gray-500">
+                                                    <span>⭐ {repo.stargazers_count}</span>
+                                                    <span>🔄 {new Date(repo.pushed_at).toLocaleDateString()}</span>
+                                                    {repo.language && <span>💻 {repo.language}</span>}
+                                                </div>
+                                            </div>
+                                            <div className="ml-6">
+                                                <label className="flex items-center gap-3 cursor-pointer">
+                                                    <span className={`text-sm font-medium ${isVisible ? 'text-green-400' : 'text-gray-500'}`}>
+                                                        {isVisible ? 'Visible' : 'Hidden'}
+                                                    </span>
+                                                    <div
+                                                        className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full ${isVisible ? 'bg-green-600' : 'bg-gray-600'
+                                                            }`}
+                                                        onClick={() => toggleVisibility(repo.name)}
+                                                    >
+                                                        <span
+                                                            className={`absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ease-in-out ${isVisible ? 'translate-x-6' : 'translate-x-0'
+                                                                }`}
+                                                        />
+                                                    </div>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    <div className="mt-8 p-4 bg-blue-900/20 border border-blue-500/50 rounded-lg">
+                        <h3 className="text-blue-400 font-semibold mb-2">💡 Tips:</h3>
+                        <ul className="text-blue-300 text-sm space-y-1">
+                            <li>• Featured repositories are visible by default</li>
+                            <li>• Changes are saved automatically to your browser's local storage</li>
+                            <li>• Only you can access this admin panel with the password</li>
+                            <li>• Refresh the main portfolio to see visibility changes</li>
+                            <li>• <strong>Cache Control:</strong> Use "Clear Cache" button above or press <kbd>Ctrl+Shift+C</kbd> to reload fresh GitHub data</li>
+                        </ul>
+                    </div>
+                </div>
+            </main>
+        </div>
+    );
+};
+
 const App = () => {
     const [language, setLanguage] = useState('en');
+    const [showAdmin, setShowAdmin] = useState(false);
+    const [showAdminLink, setShowAdminLink] = useState(false);
+
+    // Check for admin access via URL path
+    React.useEffect(() => {
+        const currentPath = window.location.pathname;
+        if (currentPath === '/admin') {
+            setShowAdmin(true);
+        }
+    }, []);
+
+    // Keyboard shortcut to show admin link (Ctrl+Shift+A)
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.ctrlKey && e.shiftKey && e.key === 'A') {
+                e.preventDefault();
+                setShowAdminLink(!showAdminLink);
+            }
+            // Clear GitHub cache with Ctrl+Shift+C
+            if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+                e.preventDefault();
+                localStorage.removeItem(CACHE_KEY);
+                alert('GitHub cache cleared! Refresh the page to reload projects.');
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [showAdminLink]);
+
+    if (showAdmin) {
+        return <AdminPanel onBackToPortfolio={() => {
+            setShowAdmin(false);
+            // Navigate back to main portfolio
+            window.history.pushState(null, '', '/');
+        }} />;
+    }
 
     return (
         <>
@@ -833,7 +1267,10 @@ const App = () => {
                 <Projects language={language} />
                 <Contact language={language} />
             </main>
-            <Footer language={language} />
+            <Footer language={language} showAdminLink={showAdminLink} onAdminClick={() => {
+                setShowAdmin(true);
+                window.history.pushState(null, '', '/admin');
+            }} />
         </>
     );
 };
