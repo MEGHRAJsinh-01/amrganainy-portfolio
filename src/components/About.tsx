@@ -131,7 +131,7 @@ const About: React.FC<AboutProps> = ({ language }) => {
                         ))}
                     </div>
                 </div>
-                
+
                 {/* Other Skills Section */}
                 <div className="bg-gray-800/30 backdrop-blur-sm border border-gray-700 rounded-xl p-8">
                     <div className="flex items-center gap-3 mb-8">

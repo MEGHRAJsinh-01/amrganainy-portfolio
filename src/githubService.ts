@@ -184,8 +184,8 @@ export const isProjectVisible = (repoName: string) => {
 
 // List of common programming languages to separate from other skills
 const PROGRAMMING_LANGUAGES = [
-    "JavaScript", "TypeScript", "Python", "Java", "Kotlin", "C#", "C++", "C", "Swift", 
-    "Go", "Rust", "PHP", "Ruby", "Dart", "Scala", "R", "Objective-C", "Shell", 
+    "JavaScript", "TypeScript", "Python", "Java", "Kotlin", "C#", "C++", "C", "Swift",
+    "Go", "Rust", "PHP", "Ruby", "Dart", "Scala", "R", "Objective-C", "Shell",
     "PowerShell", "HTML", "CSS", "SQL", "Perl", "Lua", "Haskell", "F#"
 ];
 
@@ -224,13 +224,13 @@ export const extractSkillsFromRepos = (repos: GitHubRepo[]): { programmingLangua
             }
         }
     });
-    
+
     // Sort languages by frequency
     const sortedLanguages = Object.entries(languageCounts)
         .sort(([, a], [, b]) => b - a)
         .map(([language]) => language)
         .slice(0, 15); // Top 15 programming languages
-        
+
     // Sort skills by frequency
     const sortedSkills = Object.entries(skillCounts)
         .sort(([, a], [, b]) => b - a)
