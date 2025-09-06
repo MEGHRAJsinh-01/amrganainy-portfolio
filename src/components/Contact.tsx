@@ -1,12 +1,31 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { translations, personalInfo } from '../constants';
+import { translations } from '../constants';
 import emailjs from '@emailjs/browser';
+import { portfolioAPI } from '../api';
+import { getCachedLinkedInProfile } from '../githubService';
+import { Portfolio } from '../types';
 
 interface ContactProps {
     language: string;
 }
 
 const Contact: React.FC<ContactProps> = ({ language }) => {
+    const [portfolioData, setPortfolioData] = useState<Portfolio | null>(null);
+    const [contactData, setContactData] = useState<{
+        email: string;
+        phone: string;
+        linkedin: string;
+        github: string;
+        address: string;
+    }>({
+        email: import.meta.env.VITE_CONTACT_EMAIL || '',
+        phone: '',
+        linkedin: import.meta.env.VITE_LINKEDIN_URL || '', // Load from env with fallback
+        github: import.meta.env.VITE_GITHUB_URL || '', // Load from env with fallback
+        address: ''
+    });
+    const [isLoading, setIsLoading] = useState(true);
+
     // Initialize EmailJS with public key
     useEffect(() => {
         const publicKey = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
@@ -20,6 +39,49 @@ const Contact: React.FC<ContactProps> = ({ language }) => {
             });
         }
     }, []);
+
+    useEffect(() => {
+        const loadContactData = async () => {
+            setIsLoading(true);
+            try {
+                // Try to load from portfolio API first
+                const portfolio = await portfolioAPI.getPortfolio();
+                setPortfolioData(portfolio);
+
+                if (portfolio && portfolio.personalInfo) {
+                    setContactData(prevData => ({
+                        email: import.meta.env.VITE_CONTACT_EMAIL || prevData.email, // Always use env var for email
+                        phone: portfolio.personalInfo.phone || prevData.phone,
+                        linkedin: import.meta.env.VITE_LINKEDIN_URL || portfolio.socialLinks?.linkedin || prevData.linkedin, // Prioritize env var
+                        github: import.meta.env.VITE_GITHUB_URL || portfolio.socialLinks?.github || prevData.github, // Prioritize env var
+                        address: portfolio.personalInfo.location || prevData.address
+                    }));
+                }
+
+                // If we don't have contact info from portfolio, try LinkedIn
+                else {
+                    const linkedInProfile = getCachedLinkedInProfile();
+                    if (linkedInProfile) {
+                        // LinkedIn doesn't typically provide all contact info, but we can set what we have
+                        // and keep the portfolio LinkedIn and GitHub URLs for API access
+                        setContactData(prev => ({
+                            ...prev,
+                            email: prev.email, // LinkedIn API doesn't provide email directly
+                            phone: prev.phone, // LinkedIn API doesn't provide phone directly
+                            address: linkedInProfile.location || prev.address
+                        }));
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading contact data:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        loadContactData();
+    }, []);
+
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -47,6 +109,12 @@ const Contact: React.FC<ContactProps> = ({ language }) => {
             return;
         }
 
+        // If recipient email is not available, show error
+        if (!contactData.email) {
+            alert('Recipient email is not available. Contact form cannot be submitted.');
+            return;
+        }
+
         setIsSubmitting(true);
         setSubmitStatus('idle');
 
@@ -64,7 +132,7 @@ const Contact: React.FC<ContactProps> = ({ language }) => {
                     reply_to: formData.email,
                     subject: formData.subject || 'Portfolio Contact Form',
                     message: formData.message,
-                    to_email: personalInfo.contact.email
+                    to_email: contactData.email
                 },
                 publicKey
             );
@@ -97,28 +165,48 @@ const Contact: React.FC<ContactProps> = ({ language }) => {
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
                     <div className="flex flex-col gap-6">
-                        <div className="flex flex-col gap-4">
-                            <div className="flex items-center gap-3 group">
-                                <svg className="text-gray-400 group-hover:text-blue-400 transition-colors" fill="none" height="24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
-                                <a className="text-lg text-gray-300 hover:text-blue-400 transition-colors" href={`tel:${personalInfo.contact.phone}`}>{personalInfo.contact.phone}</a>
+                        {isLoading ? (
+                            <div className="animate-pulse space-y-4">
+                                <div className="h-8 bg-gray-700 rounded w-3/4"></div>
+                                <div className="h-8 bg-gray-700 rounded w-1/2"></div>
+                                <div className="h-8 bg-gray-700 rounded w-2/3"></div>
+                                <div className="h-8 bg-gray-700 rounded w-3/5"></div>
+                                <div className="h-8 bg-gray-700 rounded w-2/5"></div>
                             </div>
-                            <div className="flex items-center gap-3 group">
-                                <svg className="text-gray-400 group-hover:text-blue-400 transition-colors" fill="none" height="24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-                                <a className="text-lg text-gray-300 hover:text-blue-400 transition-colors" href={`mailto:${personalInfo.contact.email}`}>{personalInfo.contact.email}</a>
+                        ) : (
+                            <div className="flex flex-col gap-4">
+                                {contactData.phone && (
+                                    <div className="flex items-center gap-3 group">
+                                        <svg className="text-gray-400 group-hover:text-blue-400 transition-colors" fill="none" height="24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                                        <a className="text-lg text-gray-300 hover:text-blue-400 transition-colors" href={`tel:${contactData.phone}`}>{contactData.phone}</a>
+                                    </div>
+                                )}
+                                {contactData.email && (
+                                    <div className="flex items-center gap-3 group">
+                                        <svg className="text-gray-400 group-hover:text-blue-400 transition-colors" fill="none" height="24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+                                        <a className="text-lg text-gray-300 hover:text-blue-400 transition-colors" href={`mailto:${contactData.email}`}>{contactData.email}</a>
+                                    </div>
+                                )}
+                                {contactData.linkedin && (
+                                    <div className="flex items-center gap-3 group">
+                                        <svg className="text-gray-400 group-hover:text-blue-400 transition-colors" fill="currentColor" height="24px" viewBox="0 0 256 256" width="24px"><path d="M216,24H40A16,16,0,0,0,24,40V216a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V40A16,16,0,0,0,216,24Zm0,192H40V40H216V216ZM96,112v64a8,8,0,0,1-16,0V112a8,8,0,0,1,16,0Zm88,28v36a8,8,0,0,1-16,0V140a20,20,0,0,0-40,0v36a8,8,0,0,1-16,0V112a8,8,0,0,1,15.79-1.78A36,36,0,0,1,184,140ZM100,84A12,12,0,1,1,88,72,12,12,0,0,1,100,84Z"></path></svg>
+                                        <a className="text-lg text-gray-300 hover:text-blue-400 transition-colors" href={contactData.linkedin} target="_blank" rel="noopener noreferrer">LinkedIn</a>
+                                    </div>
+                                )}
+                                {contactData.github && (
+                                    <div className="flex items-center gap-3 group">
+                                        <svg className="text-gray-400 group-hover:text-blue-400 transition-colors" fill="currentColor" height="24px" viewBox="0 0 256 256" width="24px"><path d="M208.31,75.68A59.78,59.78,0,0,0,202.93,28,8,8,0,0,0,196,24a59.75,59.75,0,0,0-48,24H124A59.75,59.75,0,0,0,76,24a8,8,0,0,0-6.93,4,59.78,59.78,0,0,0-5.38,47.68A58.14,58.14,0,0,0,56,104v8a56.06,56.06,0,0,0,48.44,55.47A39.8,39.8,0,0,0,96,192v8H72a24,24,0,0,1-24-24A40,40,0,0,0,8,136a8,8,0,0,0,0,16,24,24,0,0,1,24,24,40,40,0,0,0,40,40H96v16a8,8,0,0,0,16,0V192a24,24,0,0,1,48,0v40a8,8,0,0,0,16,0V192a39.8,39.8,0,0,0-8.44-24.53A56.06,56.06,0,0,0,216,112v-8A58.14,58.14,0,0,0,208.31,75.68ZM200,112a40,40,0,0,1-40,40H112a40,40,0,0,1-40-40v-8a41.74,41.74,0,0,1,6.9-22.48A8,8,0,0,0,80,73.83a43.81,43.81,0,0,1,.79-33.58,43.88,43.88,0,0,1,32.32,20.06A8,8,0,0,0,119.82,64h32.35a8,8,0,0,0,6.74-3.69,43.87,43.87,0,0,1,32.32-20.06A43.81,43.81,0,0,1,192,73.83a8.09,8.09,0,0,0,1,7.65A41.72,41.72,0,0,1,200,104Z"></path></svg>
+                                        <a className="text-lg text-gray-300 hover:text-blue-400 transition-colors" href={contactData.github} target="_blank" rel="noopener noreferrer">GitHub</a>
+                                    </div>
+                                )}
+                                {contactData.address && (
+                                    <div className="flex items-center gap-3 group">
+                                        <svg className="text-gray-400 group-hover:text-blue-400 transition-colors" fill="none" height="24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                                        <span className="text-lg text-gray-300">{contactData.address}</span>
+                                    </div>
+                                )}
                             </div>
-                            <div className="flex items-center gap-3 group">
-                                <svg className="text-gray-400 group-hover:text-blue-400 transition-colors" fill="currentColor" height="24px" viewBox="0 0 256 256" width="24px"><path d="M216,24H40A16,16,0,0,0,24,40V216a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V40A16,16,0,0,0,216,24Zm0,192H40V40H216V216ZM96,112v64a8,8,0,0,1-16,0V112a8,8,0,0,1,16,0Zm88,28v36a8,8,0,0,1-16,0V140a20,20,0,0,0-40,0v36a8,8,0,0,1-16,0V112a8,8,0,0,1,15.79-1.78A36,36,0,0,1,184,140ZM100,84A12,12,0,1,1,88,72,12,12,0,0,1,100,84Z"></path></svg>
-                                <a className="text-lg text-gray-300 hover:text-blue-400 transition-colors" href={personalInfo.contact.linkedin} target="_blank" rel="noopener noreferrer">linkedin.com/in/amr-elganainy</a>
-                            </div>
-                            <div className="flex items-center gap-3 group">
-                                <svg className="text-gray-400 group-hover:text-blue-400 transition-colors" fill="currentColor" height="24px" viewBox="0 0 256 256" width="24px"><path d="M208.31,75.68A59.78,59.78,0,0,0,202.93,28,8,8,0,0,0,196,24a59.75,59.75,0,0,0-48,24H124A59.75,59.75,0,0,0,76,24a8,8,0,0,0-6.93,4,59.78,59.78,0,0,0-5.38,47.68A58.14,58.14,0,0,0,56,104v8a56.06,56.06,0,0,0,48.44,55.47A39.8,39.8,0,0,0,96,192v8H72a24,24,0,0,1-24-24A40,40,0,0,0,8,136a8,8,0,0,0,0,16,24,24,0,0,1,24,24,40,40,0,0,0,40,40H96v16a8,8,0,0,0,16,0V192a24,24,0,0,1,48,0v40a8,8,0,0,0,16,0V192a39.8,39.8,0,0,0-8.44-24.53A56.06,56.06,0,0,0,216,112v-8A58.14,58.14,0,0,0,208.31,75.68ZM200,112a40,40,0,0,1-40,40H112a40,40,0,0,1-40-40v-8a41.74,41.74,0,0,1,6.9-22.48A8,8,0,0,0,80,73.83a43.81,43.81,0,0,1,.79-33.58,43.88,43.88,0,0,1,32.32,20.06A8,8,0,0,0,119.82,64h32.35a8,8,0,0,0,6.74-3.69,43.87,43.87,0,0,1,32.32-20.06A43.81,43.81,0,0,1,192,73.83a8.09,8.09,0,0,0,1,7.65A41.72,41.72,0,0,1,200,104Z"></path></svg>
-                                <a className="text-lg text-gray-300 hover:text-blue-400 transition-colors" href={personalInfo.contact.github} target="_blank" rel="noopener noreferrer">GitHub</a>
-                            </div>
-                            <div className="flex items-center gap-3 group">
-                                <svg className="text-gray-400 group-hover:text-blue-400 transition-colors" fill="none" height="24" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                                <span className="text-lg text-gray-300">{personalInfo.contact.address}</span>
-                            </div>
-                        </div>
+                        )}
                     </div>
                     <form ref={formRef} className="flex flex-col gap-4" onSubmit={handleSubmit}>
                         <label className="flex flex-col gap-2">

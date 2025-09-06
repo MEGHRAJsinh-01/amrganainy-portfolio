@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GitHubRepo, Portfolio } from '../types';
-import { ADMIN_PASSWORD, VISIBILITY_KEY, FEATURED_REPOS, GITHUB_USERNAME } from '../constants';
+import { ADMIN_PASSWORD, VISIBILITY_KEY, GITHUB_USERNAME } from '../constants';
 import { fetchGitHubRepos, clearGitHubCache, getVisibilitySettings, saveVisibilitySettings, isProjectVisible, clearSkillsCache, clearLinkedInCache } from '../githubService';
 import { authAPI, portfolioAPI } from '../api';
 
@@ -18,6 +18,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
     const [cvViewUrl, setCvViewUrl] = useState('');
     const [cvDownloadUrl, setCvDownloadUrl] = useState('');
     const [profileImageUrl, setProfileImageUrl] = useState('');
+    const [linkedInProfileImageInfo, setLinkedInProfileImageInfo] = useState('');
     const [showCvSection, setShowCvSection] = useState(false);
     const [showProfileSection, setShowProfileSection] = useState(false);
     const [cvUpdateMessage, setCvUpdateMessage] = useState({ text: '', type: '' });
@@ -40,7 +41,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
             // Set form fields from portfolio data
             if (portfolio.cvViewUrl) setCvViewUrl(portfolio.cvViewUrl);
             if (portfolio.cvDownloadUrl) setCvDownloadUrl(portfolio.cvDownloadUrl);
-            if (portfolio.profileImage) setProfileImageUrl(portfolio.profileImage);
+            if (portfolio.profileImage) {
+                setProfileImageUrl(portfolio.profileImage);
+
+                // Check if profile image is from LinkedIn
+                if (portfolio.profileImage.includes('licdn.com') ||
+                    portfolio.profileImage.includes('linkedin.com')) {
+                    setLinkedInProfileImageInfo('Currently using LinkedIn profile picture. You can replace it with a custom image.');
+                } else {
+                    setLinkedInProfileImageInfo('');
+                }
+            }
 
             setIsLoadingPortfolio(false);
         } catch (error) {
@@ -83,10 +94,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
         }
     };
 
-    const toggleVisibility = (repoName: string) => {
+    const toggleVisibility = (repoName: string, repo?: GitHubRepo) => {
         const newSettings = {
             ...visibilitySettings,
-            [repoName]: !isProjectVisible(repoName)
+            [repoName]: !isProjectVisible(repoName, repo)
         };
         setVisibilitySettings(newSettings);
         saveVisibilitySettings(newSettings);
@@ -282,7 +293,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
                         {showProfileSection && (
                             <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 mb-6">
                                 <p className="text-gray-400 mb-4">
-                                    Set your profile image. Leave empty to not show any profile image.
+                                    Set your profile image. Leave empty to use your LinkedIn profile image automatically.
+                                    {linkedInProfileImageInfo && (
+                                        <span className="block mt-1 text-blue-500">{linkedInProfileImageInfo}</span>
+                                    )}
                                 </p>
 
                                 <div className="mb-4">
@@ -416,7 +430,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
 
                                 <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-500/50 rounded-md">
                                     <p className="text-yellow-400 text-sm mb-1">
-                                        <strong>Note:</strong> If you leave this field empty, no profile image will be shown in the About section.
+                                        <strong>Note:</strong> If you leave this field empty, your LinkedIn profile picture will be used automatically if available.
                                     </p>
                                     <p className="text-yellow-400 text-sm">
                                         You can either enter a URL for an existing image or upload a new image from your computer.
@@ -510,8 +524,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
                     ) : (
                         <div className="grid gap-4">
                             {allRepos.map((repo: GitHubRepo) => {
-                                const isVisible = isProjectVisible(repo.name);
-                                const isFeatured = FEATURED_REPOS.includes(repo.name);
+                                const isVisible = isProjectVisible(repo.name, repo);
 
                                 return (
                                     <div key={repo.id} className="bg-gray-800 border border-gray-700 rounded-lg p-6">
@@ -519,11 +532,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-3 mb-2">
                                                     <h3 className="text-lg font-semibold text-white">{repo.name}</h3>
-                                                    {isFeatured && (
-                                                        <span className="bg-yellow-600 text-yellow-100 text-xs px-2 py-1 rounded-full">
-                                                            Featured
-                                                        </span>
-                                                    )}
                                                 </div>
                                                 <p className="text-gray-400 text-sm mb-3">{repo.description || 'No description'}</p>
                                                 <div className="flex items-center gap-4 text-sm text-gray-500">
@@ -540,7 +548,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
                                                     <div
                                                         className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full ${isVisible ? 'bg-green-600' : 'bg-gray-600'
                                                             }`}
-                                                        onClick={() => toggleVisibility(repo.name)}
+                                                        onClick={() => toggleVisibility(repo.name, repo)}
                                                     >
                                                         <span
                                                             className={`absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ease-in-out ${isVisible ? 'translate-x-6' : 'translate-x-0'
@@ -559,11 +567,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
                     <div className="mt-8 p-4 bg-blue-900/20 border border-blue-500/50 rounded-lg">
                         <h3 className="text-blue-400 font-semibold mb-2">💡 Tips:</h3>
                         <ul className="text-blue-300 text-sm space-y-1">
-                            <li>• Featured repositories are visible by default</li>
+                            <li>• Projects with stars or forks are visible by default, others are hidden</li>
+                            <li>• Project visibility can be manually controlled with the toggle switches</li>
                             <li>• Project visibility changes are saved automatically to your browser's local storage</li>
                             <li>• Only authenticated users can access this admin panel</li>
                             <li>• Refresh the main portfolio to see project visibility changes</li>
-                            <li>• <strong>Profile Image:</strong> Upload an image from your PC or enter a URL. Images are stored on the server.</li>
+                            <li>• <strong>Profile Image:</strong> Upload a custom image or leave empty to use your LinkedIn profile picture. Images are stored on the server.</li>
                             <li>• <strong>CV URLs:</strong> Update your CV URLs for viewing and downloading. Changes are saved to the database.</li>
                             <li>• <strong>Projects Cache:</strong> Use "Clear Projects Cache" to reload fresh GitHub project data</li>
                             <li>• <strong>Skills Cache:</strong> Use "Clear Skills Cache" to reload fresh skills data from GitHub repositories</li>

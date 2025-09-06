@@ -55,7 +55,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Enable CORS
 app.use(cors({
-    origin: ['http://localhost:5173', 'http://localhost:4173'], // Allow frontend origins
+    origin: true, // Allow all origins
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
 }));
@@ -146,13 +146,20 @@ const initAdminUser = async () => {
         const adminExists = await User.findOne({ username: 'admin' });
 
         if (!adminExists) {
+            // Check if admin credentials are provided in environment variables
+            if (!process.env.VITE_ADMIN_PASSWORD || !process.env.VITE_ADMIN_USERNAME) {
+                console.error('ERROR: VITE_ADMIN_USERNAME and/or VITE_ADMIN_PASSWORD environment variables are not set.');
+                console.error('Admin user creation skipped for security reasons.');
+                return;
+            }
+
             const hashedPassword = await bcrypt.hash(
-                process.env.VITE_ADMIN_PASSWORD || 'admin123',
+                process.env.VITE_ADMIN_PASSWORD,
                 10
             );
 
             await User.create({
-                username: 'admin',
+                username: process.env.VITE_ADMIN_USERNAME,
                 password: hashedPassword,
                 isAdmin: true
             });
@@ -175,15 +182,15 @@ const initPortfolioData = async () => {
                 cvViewUrl: process.env.VITE_CV_VIEW_URL,
                 cvDownloadUrl: process.env.VITE_CV_DOWNLOAD_URL,
                 personalInfo: {
-                    name: 'Amr El-Ganainy',
-                    title: 'Full Stack Developer',
-                    email: 'contact@example.com',
-                    location: 'Egypt',
-                    bio: 'Software engineer with a passion for creating elegant solutions.'
+                    name: '',      // Will be loaded from LinkedIn API
+                    title: '',     // Will be loaded from LinkedIn API
+                    email: process.env.VITE_CONTACT_EMAIL || '',     // Loaded from environment variable
+                    location: '',  // Will be loaded from LinkedIn API
+                    bio: ''        // Will be loaded from LinkedIn API
                 },
                 socialLinks: {
-                    github: 'https://github.com/ganainy',
-                    linkedin: 'https://linkedin.com/in/amr-elganainy'
+                    github: process.env.VITE_GITHUB_URL,
+                    linkedin: process.env.VITE_LINKEDIN_URL
                 }
             });
 
@@ -232,27 +239,27 @@ app.post('/api/auth/login', async (req, res) => {
 // Helper function to ensure image URLs have proper domain
 const ensureFullUrls = (data) => {
     if (!data) return data;
-    
+
     // Create a deep copy to avoid modifying the original
     const result = JSON.parse(JSON.stringify(data));
-    
+
     // Function to process URL fields
     const processUrl = (url) => {
         if (!url || typeof url !== 'string') return url;
         if (url.startsWith('http://') || url.startsWith('https://')) return url;
-        
+
         if (url.startsWith('/uploads/')) {
             return `${process.env.SERVER_URL || `http://${process.env.HOST || 'localhost'}:${PORT}`}${url}`;
         }
-        
+
         return url;
     };
-    
+
     // Process profile image
     if (result.profileImage) {
         result.profileImage = processUrl(result.profileImage);
     }
-    
+
     return result;
 };
 

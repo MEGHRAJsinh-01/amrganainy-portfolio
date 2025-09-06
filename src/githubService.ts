@@ -1,5 +1,5 @@
 import { GitHubRepo, CachedData, Project, LinkedInProfileData, LinkedInAdditionalProfileData, LinkedInCacheData, LinkedInAdditionalCacheData } from './types';
-import { GITHUB_USERNAME, CACHE_KEY, CACHE_DURATION, FEATURED_REPOS, VISIBILITY_KEY, personalInfo } from './constants';
+import { GITHUB_USERNAME, CACHE_KEY, CACHE_DURATION, VISIBILITY_KEY, personalInfo } from './constants';
 import { translateText } from './translationService';
 
 export const SKILLS_CACHE_KEY = 'github_skills_cache';
@@ -72,75 +72,47 @@ export const transformGitHubRepoToProject = (repo: GitHubRepo, language: string)
         return null;
     }
 
-    // Check admin visibility settings
-    if (!isProjectVisible(repo.name)) {
+    // Check admin visibility settings - pass the repo object for star/fork checking
+    if (!isProjectVisible(repo.name, repo)) {
         return null;
     }
 
-    // Check if this is a featured repository
-    const isFeatured = FEATURED_REPOS.includes(repo.name);
-
-    // Parse custom data from repo description for featured repos
+    // Parse custom data from repo description
     let customData = {};
-    if (isFeatured) {
-        const videoMatch = repo.description?.match(/https:\/\/www\.youtube\.com\/watch\?v=[\w-]+/);
-        if (videoMatch) {
-            customData = { videoUrl: videoMatch[0] };
-        }
+    const videoMatch = repo.description?.match(/https:\/\/www\.youtube\.com\/watch\?v=[\w-]+/);
+    if (videoMatch) {
+        customData = { videoUrl: videoMatch[0] };
     }
 
-    // Use GitHub data directly (enhanced descriptions and tags are now stored in GitHub)
-    let title, description, tags;
-    if (isFeatured) {
-        title = {
-            en: repo.name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-            de: repo.name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-        };
-        description = {
-            en: repo.description || `A ${repo.language || 'software'} project`,
-            de: repo.description || `Ein ${repo.language || 'Software'} Projekt`
-        };
-        // Use topics from GitHub with proper formatting
-        tags = repo.topics && repo.topics.length > 0 ?
-            repo.topics.map(topic =>
-                topic
-                    .replace(/-/g, ' ')  // Replace hyphens with spaces
-                    .split(' ')
-                    .map(word => word.charAt(0).toUpperCase() + word.slice(1)) // Capitalize first letter of each word
-                    .join(' ')
-            ) :
-            [repo.language || 'Project'];
-    } else {
-        // Generate tags from language and topics
-        const generatedTags: string[] = [];
-        if (repo.language) {
-            generatedTags.push(repo.language);
-        }
-        if (repo.topics && repo.topics.length > 0) {
-            // Format topics before adding them
-            const formattedTopics = repo.topics.slice(0, 3).map(topic =>
-                topic
-                    .replace(/-/g, ' ')  // Replace hyphens with spaces
-                    .split(' ')
-                    .map(word => word.charAt(0).toUpperCase() + word.slice(1)) // Capitalize first letter of each word
-                    .join(' ')
-            );
-            generatedTags.push(...formattedTopics); // Limit to 3 additional topics
-        }
-
-        // Create bilingual title and description
-        title = {
-            en: repo.name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-            de: repo.name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-        };
-
-        description = {
-            en: repo.description || `A ${repo.language || 'software'} project`,
-            de: repo.description || `Ein ${repo.language || 'Software'} Projekt`
-        };
-
-        tags = generatedTags.length > 0 ? generatedTags : ['Project'];
+    // Generate tags from language and topics
+    const generatedTags: string[] = [];
+    if (repo.language) {
+        generatedTags.push(repo.language);
     }
+    if (repo.topics && repo.topics.length > 0) {
+        // Format topics before adding them
+        const formattedTopics = repo.topics.slice(0, 3).map(topic =>
+            topic
+                .replace(/-/g, ' ')  // Replace hyphens with spaces
+                .split(' ')
+                .map(word => word.charAt(0).toUpperCase() + word.slice(1)) // Capitalize first letter of each word
+                .join(' ')
+        );
+        generatedTags.push(...formattedTopics); // Limit to 3 additional topics
+    }
+
+    // Create bilingual title and description
+    const title = {
+        en: repo.name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+        de: repo.name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+    };
+
+    const description = {
+        en: repo.description || `A ${repo.language || 'software'} project`,
+        de: repo.description || `Ein ${repo.language || 'Software'} Projekt`
+    };
+
+    const tags = generatedTags.length > 0 ? generatedTags : ['Project'];
 
     return {
         title,
@@ -151,8 +123,8 @@ export const transformGitHubRepoToProject = (repo: GitHubRepo, language: string)
         lastUpdated: repo.pushed_at,
         stars: repo.stargazers_count,
         forks: repo.forks_count,
-        isFeatured,
-        ...customData // Add custom data like videoUrl for featured repos
+        isFeatured: false, // All projects are non-featured by default
+        ...customData // Add custom data like videoUrl
     };
 };
 
@@ -175,13 +147,21 @@ export const saveVisibilitySettings = (settings: { [key: string]: boolean }) => 
     }
 };
 
-export const isProjectVisible = (repoName: string) => {
+export const isProjectVisible = (repoName: string, repo?: GitHubRepo) => {
     const settings = getVisibilitySettings();
-    // If no setting exists, default to visible for featured repos, hidden for others
-    if (settings[repoName] === undefined) {
-        return FEATURED_REPOS.includes(repoName);
+    // If explicit setting exists, use it
+    if (settings[repoName] !== undefined) {
+        return settings[repoName];
     }
-    return settings[repoName];
+
+    // If no setting exists, check if repo has stars or forks
+    if (repo) {
+        // Show repos with stars or forks by default
+        return repo.stargazers_count > 0 || repo.forks_count > 0;
+    }
+
+    // If no repo data and no explicit setting, default to hidden
+    return false;
 };
 
 // List of common programming languages to separate from other skills
@@ -323,6 +303,27 @@ export const LINKEDIN_COMPANY_CACHE_KEY = 'linkedin_company_cache';
 export const APIFY_ACTOR_ID = 'apify/linkedin-profile-scraper';
 export const CACHE_DURATION_LONG = 7 * 24 * 60 * 60 * 1000; // 7 days for LinkedIn data
 
+// Helper function to get language code from language name
+const getLanguageCode = (languageName: string): string => {
+    // Convert language name to lowercase for case-insensitive matching
+    const name = languageName.toLowerCase();
+
+    // Map common language names to ISO codes
+    if (name.includes('german') || name.includes('deutsch')) return 'DE';
+    if (name.includes('english')) return 'EN';
+    if (name.includes('french') || name.includes('français')) return 'FR';
+    if (name.includes('spanish') || name.includes('español')) return 'ES';
+    if (name.includes('arabic') || name.includes('عربى')) return 'AR';
+    if (name.includes('chinese') || name.includes('中文')) return 'CN';
+    if (name.includes('portuguese') || name.includes('português')) return 'PT';
+    if (name.includes('italian') || name.includes('italiano')) return 'IT';
+    if (name.includes('japanese') || name.includes('日本語')) return 'JP';
+    if (name.includes('russian') || name.includes('русский')) return 'RU';
+
+    // If no match found, take first two letters of the language name
+    return languageName.substring(0, 2).toUpperCase();
+};
+
 export const fetchLinkedInProfile = async (): Promise<LinkedInProfileData> => {
     try {
         console.log('Fetching LinkedIn profile using proxy for:', LINKEDIN_PROFILE_URL);
@@ -359,6 +360,11 @@ export const fetchLinkedInProfile = async (): Promise<LinkedInProfileData> => {
 
         console.log('LinkedIn profile data retrieved successfully from Apify');
 
+        // For debugging
+        if (profileData.languages) {
+            console.log('Languages found in LinkedIn profile:', profileData.languages);
+        }
+
         // Transform the response to match our LinkedInProfileData interface
         const transformedData: LinkedInProfileData = {
             name: profileData.basic_info?.fullname || '',
@@ -389,7 +395,21 @@ export const fetchLinkedInProfile = async (): Promise<LinkedInProfileData> => {
                 fieldOfStudy: edu.field_of_study || '',
                 startDate: edu.start_date?.month ? `${edu.start_date.month} ${edu.start_date.year}` : '',
                 endDate: edu.end_date?.month ? `${edu.end_date.month} ${edu.end_date.year}` : ''
-            }))
+            })),
+            // Parse languages array from the API response
+            languages: (profileData.languages || []).map((lang: any) => {
+                // Create a standardized language object
+                const langObj = {
+                    language: lang.language || '',
+                    proficiency: lang.proficiency || '',
+                    // Additional fields for the UI
+                    name: lang.language || '',
+                    code: getLanguageCode(lang.language || ''),
+                    level: lang.proficiency || 'Unknown',
+                    certificate: '' // Set if available in the data
+                };
+                return langObj;
+            })
         };
 
         return transformedData;

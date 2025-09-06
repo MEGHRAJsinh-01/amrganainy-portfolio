@@ -84,6 +84,7 @@ export interface LanguageTranslation {
         title: string;
         bio?: string;            // Now optional since it comes from LinkedIn
         education: string;
+        experience?: string;     // Added for work experience section
         master?: string;         // Now optional since it comes from LinkedIn 
         bachelor?: string;       // Now optional since it comes from LinkedIn
         languages: string;
@@ -138,6 +139,16 @@ export interface LinkedInEducation {
     endDate?: string;
 }
 
+// Language Proficiency Interface
+export interface LanguageProficiency {
+    language: string;
+    proficiency?: string;
+    name?: string;
+    code?: string;
+    level?: string;
+    certificate?: string;
+}
+
 export interface LinkedInProfileData {
     name?: string;
     headline?: string;
@@ -149,6 +160,7 @@ export interface LinkedInProfileData {
     experiences?: LinkedInExperience[];
     education?: LinkedInEducation[];
     skills?: LinkedInSkill[];
+    languages?: LanguageProficiency[];
     public_identifier?: string;
     profile_pic_url?: string;
     background_cover_image_url?: string;

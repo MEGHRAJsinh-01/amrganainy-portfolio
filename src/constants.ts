@@ -10,8 +10,9 @@ export const translations: Translations = {
             cv: "CV"
         },
         about: {
-            title: "CS Graduate & Cyber Security Master Student",
+            title: "", // This is a placeholder - actual title should come from LinkedIn headline
             education: "Education:",
+            experience: "Experience:",
             languages: "Languages:",
             programmingLanguages: "Programming Languages",
             skills: "My Skills",
@@ -54,8 +55,9 @@ export const translations: Translations = {
             cv: "Lebenslauf"
         },
         about: {
-            title: "CS Graduate & Cyber Security Master Student",
+            title: "", // This is a placeholder - actual title should come from LinkedIn headline
             education: "Ausbildung:",
+            experience: "Berufserfahrung:",
             languages: "Sprachen:",
             programmingLanguages: "Programmiersprachen",
             skills: "Meine Fähigkeiten",
@@ -93,39 +95,28 @@ export const translations: Translations = {
 };
 
 // --- Data ---
-// Default values that will be overridden by API data when loaded
+// EMERGENCY FALLBACK VALUES - These should only be used if API data completely fails to load
+// These values should never be used directly - always prefer data from LinkedIn API
 export const personalInfo = {
-    name: "Amr Elganainy",
-    title: "CS Graduate & Cyber Security Master Student",
-    imageUrl: import.meta.env.VITE_PROFILE_IMAGE_URL || "", // Default fallback
+    name: "",
+    title: "",
+    imageUrl: import.meta.env.VITE_PROFILE_IMAGE_URL || "", // Only used if no LinkedIn or portfolio image
     // CV URLs loaded from environment variables (fallback)
     cvUrl: import.meta.env.VITE_CV_VIEW_URL || "",
     cvPdfUrl: import.meta.env.VITE_CV_DOWNLOAD_URL || "",
     contact: {
-        email: "amrmohammedali11@gmail.com",
-        linkedin: "https://www.linkedin.com/in/amr-elganainy/",
-        github: "https://github.com/ganainy",
-        phone: "017 641 733 956",
-        address: "44143, Dortmund"
+        email: "",
+        linkedin: import.meta.env.VITE_LINKEDIN_URL, // Only used to fetch LinkedIn data
+        github: import.meta.env.VITE_GITHUB_URL, // Only used to fetch GitHub data
+        phone: "",
+        address: ""
     }
 };
 
-// Featured repositories that should be treated as manual projects
-export const FEATURED_REPOS = [
-    'appium-traverser',
-    'captive-portal-analyzer-kotlin',
-    'raspberrypi-captive-portal',
-    'job-app-assistant',
-    'Our_chat',
-    'gym_masters_kotlin_compose',
-    'realtime_quizzes',
-    'Reminderly'
-];
-
 // --- Constants ---
-export const GITHUB_USERNAME = 'ganainy';
-export const CACHE_KEY = 'github_projects_cache';
+export const GITHUB_USERNAME = import.meta.env.VITE_GITHUB_USERNAME;
+export const CACHE_KEY = import.meta.env.VITE_CACHE_KEY;
 export const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-export const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123'; // Fallback for development
+export const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD; // Fallback for development
 export const VISIBILITY_KEY = 'project_visibility_settings';
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+export const API_URL = import.meta.env.VITE_API_URL;

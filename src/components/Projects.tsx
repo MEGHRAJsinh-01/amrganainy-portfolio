@@ -100,17 +100,59 @@ const Projects: React.FC<ProjectsProps> = ({ language }) => {
                     </div>
                 )}
 
-                {!isLoading && (
+                {!isLoading && allProjects.length > 0 && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         {allProjects.map(project => (
                             <ProjectCard
-                                key={project.title?.en || project.repoUrl}
+                                key={typeof project.title === 'object' ? project.title.en : project.repoUrl}
                                 project={project}
                                 language={language}
                                 onVideoClick={handleVideoClick}
                                 onProjectClick={handleProjectClick}
                             />
                         ))}
+                    </div>
+                )}
+
+                {!isLoading && allProjects.length === 0 && !error && (
+                    <div className="text-center py-10">
+                        <div className="bg-blue-900/20 border border-blue-500/50 rounded-lg p-6 max-w-xl mx-auto">
+                            <h3 className="text-white text-xl mb-3">
+                                {language === 'de'
+                                    ? 'Keine Projekte sind derzeit sichtbar'
+                                    : 'No projects are currently visible'}
+                            </h3>
+                            <p className="text-gray-300 mb-4">
+                                {language === 'de'
+                                    ? 'Dies könnte folgende Gründe haben:'
+                                    : 'This could be because:'}
+                            </p>
+                            <ul className="text-gray-400 text-sm mb-4 space-y-1 list-disc list-inside">
+                                <li>
+                                    {language === 'de'
+                                        ? 'Kein GitHub-Repository erfüllt die Sichtbarkeitskriterien (Repositories benötigen standardmäßig Stars oder Pull-Requests, um angezeigt zu werden)'
+                                        : 'No GitHub repositories meet the visibility criteria (repositories need stars or pull requests to be shown by default)'}
+                                </li>
+                                <li>
+                                    {language === 'de'
+                                        ? 'Die Projekteinstellungen sind so konfiguriert, dass alle Projekte ausgeblendet sind'
+                                        : 'Project visibility settings are configured to hide all projects'}
+                                </li>
+                                <li>
+                                    {language === 'de'
+                                        ? 'Es könnte ein temporäres Problem mit der GitHub-API-Verbindung bestehen'
+                                        : 'There might be a temporary issue with the GitHub API connection'}
+                                </li>
+                            </ul>
+                            <p className="text-gray-300 mb-2">
+                                {language === 'de'
+                                    ? 'Wenn Sie der Website-Besitzer sind, besuchen Sie bitte das Admin-Panel, um die Sichtbarkeitseinstellungen der Projekte zu verwalten.'
+                                    : 'If you are the site owner, please visit the admin panel to manage project visibility settings.'}
+                            </p>
+                            <a href="/admin" className="inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+                                {language === 'de' ? 'Zum Admin-Panel' : 'Go to Admin Panel'}
+                            </a>
+                        </div>
                     </div>
                 )}
             </div>
