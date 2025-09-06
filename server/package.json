@@ -1,7 +1,7 @@
 {
     "name": "portfolio-api-proxy",
     "version": "1.0.0",
-    "description": "API server for portfolio with database integration",
+    "description": "API server for portfolio with MongoDB database integration, centralized configuration system, and content management through admin panel",
     "main": "server.js",
     "scripts": {
         "start": "node server.js",

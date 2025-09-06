@@ -3,6 +3,7 @@ import { GitHubRepo, Portfolio } from '../types';
 import { ADMIN_PASSWORD, VISIBILITY_KEY, GITHUB_USERNAME } from '../constants';
 import { fetchGitHubRepos, clearGitHubCache, getVisibilitySettings, saveVisibilitySettings, isProjectVisible, clearSkillsCache, clearLinkedInCache } from '../githubService';
 import { authAPI, portfolioAPI } from '../api';
+import { ContactSection, SocialSection } from './admin-sections';
 
 interface AdminPanelProps {
     onBackToPortfolio: () => void;
@@ -18,11 +19,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
     const [cvViewUrl, setCvViewUrl] = useState('');
     const [cvDownloadUrl, setCvDownloadUrl] = useState('');
     const [profileImageUrl, setProfileImageUrl] = useState('');
+    const [contactEmail, setContactEmail] = useState('');
+    const [githubUrl, setGithubUrl] = useState('');
+    const [linkedinUrl, setLinkedinUrl] = useState('');
     const [linkedInProfileImageInfo, setLinkedInProfileImageInfo] = useState('');
     const [showCvSection, setShowCvSection] = useState(false);
     const [showProfileSection, setShowProfileSection] = useState(false);
+    const [showContactSection, setShowContactSection] = useState(false);
+    const [showSocialSection, setShowSocialSection] = useState(false);
     const [cvUpdateMessage, setCvUpdateMessage] = useState({ text: '', type: '' });
     const [profileUpdateMessage, setProfileUpdateMessage] = useState({ text: '', type: '' });
+    const [contactUpdateMessage, setContactUpdateMessage] = useState({ text: '', type: '' });
+    const [socialUpdateMessage, setSocialUpdateMessage] = useState({ text: '', type: '' });
     const [isLoadingPortfolio, setIsLoadingPortfolio] = useState(false);
 
     React.useEffect(() => {
@@ -51,6 +59,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
                 } else {
                     setLinkedInProfileImageInfo('');
                 }
+            }
+
+            // Set contact email from portfolio data
+            if (portfolio.personalInfo?.email) {
+                setContactEmail(portfolio.personalInfo.email);
+            }
+
+            // Set social links from portfolio data
+            if (portfolio.socialLinks?.github) {
+                setGithubUrl(portfolio.socialLinks.github);
+            }
+            if (portfolio.socialLinks?.linkedin) {
+                setLinkedinUrl(portfolio.socialLinks.linkedin);
             }
 
             setIsLoadingPortfolio(false);
@@ -174,6 +195,57 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
             console.error('Error updating profile image:', error);
             setProfileUpdateMessage({
                 text: 'Failed to update profile image. Please try again.',
+                type: 'error'
+            });
+        }
+    };
+
+    const handleContactEmailUpdate = async () => {
+        try {
+            setContactUpdateMessage({ text: 'Updating contact email...', type: 'info' });
+
+            const updatedPortfolio = await portfolioAPI.updatePortfolio({
+                personalInfo: {
+                    ...(portfolioData?.personalInfo || {}),
+                    email: contactEmail
+                }
+            });
+
+            setPortfolioData(updatedPortfolio);
+            setContactUpdateMessage({
+                text: 'Contact email updated successfully! The changes are now live on your portfolio.',
+                type: 'info'
+            });
+        } catch (error) {
+            console.error('Error updating contact email:', error);
+            setContactUpdateMessage({
+                text: 'Failed to update contact email. Please try again or check your connection.',
+                type: 'error'
+            });
+        }
+    };
+
+    const handleSocialLinksUpdate = async () => {
+        try {
+            setSocialUpdateMessage({ text: 'Updating social links...', type: 'info' });
+
+            const updatedPortfolio = await portfolioAPI.updatePortfolio({
+                socialLinks: {
+                    ...(portfolioData?.socialLinks || {}),
+                    github: githubUrl,
+                    linkedin: linkedinUrl
+                }
+            });
+
+            setPortfolioData(updatedPortfolio);
+            setSocialUpdateMessage({
+                text: 'Social links updated successfully! The changes are now live on your portfolio.',
+                type: 'info'
+            });
+        } catch (error) {
+            console.error('Error updating social links:', error);
+            setSocialUpdateMessage({
+                text: 'Failed to update social links. Please try again or check your connection.',
                 type: 'error'
             });
         }
@@ -508,6 +580,113 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
                         )}
                     </div>
 
+                    {/* Contact Email Section */}
+                    <div className="mb-8">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-xl font-semibold">Contact Email Management</h2>
+                            <button
+                                onClick={() => setShowContactSection(!showContactSection)}
+                                className="text-blue-400 hover:text-blue-300"
+                            >
+                                {showContactSection ? 'Hide' : 'Show'} Section
+                            </button>
+                        </div>
+
+                        {showContactSection && (
+                            <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 mb-6">
+                                <p className="text-gray-400 mb-4">
+                                    Update your contact email. This email is used in the Contact section of your portfolio.
+                                </p>
+
+                                <div className="mb-4">
+                                    <label className="block text-gray-300 text-sm font-medium mb-2">
+                                        Contact Email
+                                    </label>
+                                    <input
+                                        type="email"
+                                        value={contactEmail}
+                                        onChange={(e) => setContactEmail(e.target.value)}
+                                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:border-blue-500 focus:ring-blue-500"
+                                        placeholder="your.email@example.com"
+                                    />
+                                </div>
+
+                                <button
+                                    onClick={handleContactEmailUpdate}
+                                    className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
+                                >
+                                    Update Contact Email
+                                </button>
+
+                                {contactUpdateMessage.text && (
+                                    <div className={`mt-4 p-4 rounded-md ${contactUpdateMessage.type === 'error' ? 'bg-red-900/20 border border-red-500/50 text-red-300' : 'bg-blue-900/20 border border-blue-500/50 text-blue-300'}`}>
+                                        {contactUpdateMessage.text}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Social Links Section */}
+                    <div className="mb-8">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-xl font-semibold">Social Links Management</h2>
+                            <button
+                                onClick={() => setShowSocialSection(!showSocialSection)}
+                                className="text-blue-400 hover:text-blue-300"
+                            >
+                                {showSocialSection ? 'Hide' : 'Show'} Section
+                            </button>
+                        </div>
+
+                        {showSocialSection && (
+                            <div className="bg-gray-800 border border-gray-700 rounded-lg p-6 mb-6">
+                                <p className="text-gray-400 mb-4">
+                                    Update your social media links. These links are used in the About section of your portfolio.
+                                </p>
+
+                                <div className="mb-4">
+                                    <label className="block text-gray-300 text-sm font-medium mb-2">
+                                        GitHub URL
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={githubUrl}
+                                        onChange={(e) => setGithubUrl(e.target.value)}
+                                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:border-blue-500 focus:ring-blue-500"
+                                        placeholder="https://github.com/yourusername"
+                                    />
+                                </div>
+
+                                <div className="mb-4">
+                                    <label className="block text-gray-300 text-sm font-medium mb-2">
+                                        LinkedIn URL
+                                    </label>
+                                    <input
+                                        type="url"
+                                        value={linkedinUrl}
+                                        onChange={(e) => setLinkedinUrl(e.target.value)}
+                                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:border-blue-500 focus:ring-blue-500"
+                                        placeholder="https://linkedin.com/in/yourusername"
+                                    />
+                                </div>
+
+                                <button
+                                    onClick={handleSocialLinksUpdate}
+                                    className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
+                                >
+                                    Update Social Links
+                                </button>
+
+                                {socialUpdateMessage.text && (
+                                    <div className={`mt-4 p-4 rounded-md ${socialUpdateMessage.type === 'error' ? 'bg-red-900/20 border border-red-500/50 text-red-300' : 'bg-blue-900/20 border border-blue-500/50 text-blue-300'}`}>
+                                        {socialUpdateMessage.text}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
                     <div className="mb-8">
                         <h2 className="text-xl font-semibold mb-4">Project Visibility Control</h2>
                         <p className="text-gray-400 mb-6">
@@ -572,8 +751,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
                             <li>• Project visibility changes are saved automatically to your browser's local storage</li>
                             <li>• Only authenticated users can access this admin panel</li>
                             <li>• Refresh the main portfolio to see project visibility changes</li>
-                            <li>• <strong>Profile Image:</strong> Upload a custom image or leave empty to use your LinkedIn profile picture. Images are stored on the server.</li>
-                            <li>• <strong>CV URLs:</strong> Update your CV URLs for viewing and downloading. Changes are saved to the database.</li>
+                            <li>• <strong>Profile Image:</strong> Upload a custom image or leave empty to use your LinkedIn profile picture. Images are stored on the server and saved in the database.</li>
+                            <li>• <strong>CV URLs:</strong> Update your CV URLs for viewing and downloading. All changes are saved to the database.</li>
+                            <li>• <strong>Social Links:</strong> Your GitHub and LinkedIn URLs are stored in the database and managed through this panel.</li>
+                            <li>• <strong>Contact Email:</strong> Your contact email is stored in the database and can be updated here.</li>
                             <li>• <strong>Projects Cache:</strong> Use "Clear Projects Cache" to reload fresh GitHub project data</li>
                             <li>• <strong>Skills Cache:</strong> Use "Clear Skills Cache" to reload fresh skills data from GitHub repositories</li>
                             <li>• <strong>LinkedIn Cache:</strong> Use "Clear LinkedIn Cache" to reload fresh bio data from LinkedIn API</li>

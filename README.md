@@ -93,54 +93,108 @@ A modern, responsive portfolio website built with React, TypeScript, and Tailwin
 
 4. The server will run on port 3000 by default
 
-## 🛡️ Environment Variables
+## 🛡️ Environment Configuration System
 
-Create a `.env.local` file in the root directory with the following variables:
+The application uses a robust configuration system that loads different settings based on the `NODE_ENV` environment variable:
 
+### Configuration Structure
+
+- **Development**: Uses `.env.local` in the root directory
+- **Production**: Uses `.env.production` in the server directory
+- **Test**: Uses `.env.test` in the root directory (if needed)
+
+### Configuration Organization
+
+The centralized configuration module is located at `server/config/index.js` and manages:
+
+- **Server Settings**: Port, host, environment detection
+- **Database Configuration**: MongoDB connection
+- **Frontend URLs**: CORS settings
+- **Authentication**: JWT secrets and admin credentials
+- **API Services**: Third-party service keys
+- **Upload Settings**: File storage and URL generation
+- **Portfolio Settings**: Default values and content URLs
+
+### Setting Up Environment Files
+
+Example environment files are provided in the `server/config/` directory:
+- `example.env.local`: Template for local development
+- `example.env.production`: Template for production deployment
+
+Copy these files to their appropriate locations and update with your specific values:
+
+```bash
+# For development
+cp server/config/example.env.local .env.local
+# Edit .env.local with your values
+
+# For production
+cp server/config/example.env.production server/.env.production
+# Edit server/.env.production with your production values
 ```
-# API Configuration
-VITE_API_URL=http://localhost:3000/api
 
-# Database Configuration
-MONGO_URI=mongodb://localhost:27017/portfolio
+### Environment Variables vs Database Content
 
-# JWT Authentication
-JWT_SECRET=your_secure_jwt_secret_here
+The application uses a hybrid approach for configuration:
 
-# Admin Authentication
-VITE_ADMIN_PASSWORD=your_secure_admin_password_here
+1. **Environment Variables**: Used for technical configuration and secrets:
+   - Server settings (port, host, environment)
+   - Database connection strings
+   - API keys and tokens
+   - Authentication secrets
+   - CORS settings
 
-# Server Configuration
-PORT=3000
-FRONTEND_URL=http://localhost:5173
+2. **Database Content**: All portfolio content is stored in the database and managed through the admin panel:
+   - Profile image URL
+   - CV view/download URLs
+   - Contact email
+   - Social media links
+   - Personal information
 
-# LinkedIn Scraper (Apify)
-VITE_APIFY_TOKEN=your_apify_token_here
-
-# EmailJS Configuration
-VITE_EMAILJS_PUBLIC_KEY=your_emailjs_public_key
-VITE_EMAILJS_PRIVATE_KEY=your_emailjs_private_key
-VITE_EMAILJS_SERVICE_ID=your_emailjs_service_id
-VITE_EMAILJS_TEMPLATE_ID=your_emailjs_template_id
-
-# CV URLs (Fallback)
-VITE_CV_VIEW_URL=https://drive.google.com/file/d/YOUR_FILE_ID/view
-VITE_CV_DOWNLOAD_URL=https://drive.google.com/uc?export=download&id=YOUR_FILE_ID
-
-# Profile Image (Fallback)
-VITE_PROFILE_IMAGE_URL=your_profile_image_path_or_url
-```
+This separation ensures that sensitive configuration stays in environment files while content can be dynamically managed through the user interface.
 
 ## 📊 Admin Panel
 
 Access the admin panel by adding `#admin` to the URL. Use the password set in your `VITE_ADMIN_PASSWORD` environment variable.
 
 Features:
+- **Portfolio Content Management**: Manage all portfolio content through the database:
+  - **Profile Image**: Upload, update, or remove your profile picture
+  - **CV URLs**: Update your CV viewing and download links
+  - **Contact Information**: Manage email and social media links
+  - **Bio Information**: This is primarily pulled from LinkedIn but can be customized
 - **Project Visibility**: Control which GitHub repositories are displayed
 - **Cache Management**: Clear GitHub, LinkedIn, and skills caches
-- **CV URLs**: Update your CV viewing and download links
-- **Profile Image**: Upload, update, or remove your profile picture
 - **Authentication**: Secure JWT-based login system
+
+### Portfolio Settings in Database
+
+All portfolio content settings are stored in the database and managed through the admin panel rather than environment variables:
+
+- **Profile Image**: Upload a custom image or use your LinkedIn profile image
+- **CV URLs**: Viewing and download URLs for your resume
+- **Contact Email**: Your contact email address
+- **Social Links**: GitHub, LinkedIn, and other social media URLs
+
+This approach provides several benefits:
+1. **Easy Updates**: Change portfolio content without editing configuration files
+2. **Dynamic Management**: Update content without redeploying the application
+3. **Separation of Concerns**: Configuration files only contain technical settings, not content
+4. **User-Friendly**: Non-technical users can update content through the UI
+
+### How Portfolio Content Management Works
+
+1. **Initial Setup**: When the server starts for the first time, a portfolio settings document is created in MongoDB with empty default values.
+2. **Admin Panel Access**: Log in to the admin panel by adding `#admin` to the URL and entering your password.
+3. **Content Management**: Use the admin panel forms to:
+   - Upload a profile image (stored on server with path saved in the database)
+   - Update CV viewing and download URLs (stored in database)
+   - Set your contact email (stored in database)
+   - Update your GitHub and LinkedIn URLs (stored in database)
+4. **Instant Updates**: Changes are saved to the database and take effect immediately without requiring server restart.
+5. **Content Retrieval**: The frontend fetches these settings from the database through the `/api/portfolio` endpoint.
+
+No environment variables are used for content, keeping your configuration files clean and focused on technical settings only.
 
 ## 📚 Integration Guides
 

@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
-const dotenv = require('dotenv');
 const path = require('path');
 const http = require('http');
 const mongoose = require('mongoose');
@@ -10,18 +9,16 @@ const fs = require('fs-extra');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-// Load environment variables from .env.production in production or .env.local in development
-const envFile = process.env.NODE_ENV === 'production' ? '../.env.production' : '../.env.local';
-dotenv.config({ path: path.resolve(__dirname, envFile) });
+// Load configuration from the centralized config module
+const config = require('./config');
 
-console.log(`Starting server in ${process.env.NODE_ENV || 'development'} mode`);
+console.log(`Starting server in ${config.server.nodeEnv} mode`);
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = config.server.port;
 
 // MongoDB Connection
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/portfolio';
-mongoose.connect(MONGO_URI)
+mongoose.connect(config.database.mongoUri, config.database.options)
     .then(() => console.log('MongoDB connected'))
     .catch(err => console.error('MongoDB connection error:', err));
 
@@ -56,17 +53,9 @@ const upload = multer({
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// Enable CORS with more restricted configuration for production
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+// Enable CORS with configuration from config module
 app.use(cors({
-    origin: [
-        FRONTEND_URL,
-        // Add your custom domain here when it's ready
-        // 'https://yourdomain.com',
-        // For development
-        'http://localhost:5173',
-        'http://localhost:3000'
-    ],
+    origin: config.frontend.corsOrigins,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
 }));
@@ -75,8 +64,12 @@ app.use(express.json());
 
 // Simple health check endpoint
 app.get('/api/health', (req, res) => {
-    console.log('Health check endpoint called');
-    res.json({ status: 'OK', message: 'Server is running' });
+    res.json({
+        status: 'OK',
+        message: 'Server is running',
+        env: config.server.nodeEnv,
+        timestamp: new Date().toISOString()
+    });
 });
 
 // -------------------- Database Schemas --------------------
@@ -136,7 +129,7 @@ const verifyToken = (req, res, next) => {
     }
 
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret');
+        const decoded = jwt.verify(token, config.auth.jwtSecret);
         req.user = decoded;
         next();
     } catch (error) {
@@ -158,19 +151,19 @@ const initAdminUser = async () => {
 
         if (!adminExists) {
             // Check if admin credentials are provided in environment variables
-            if (!process.env.VITE_ADMIN_PASSWORD || !process.env.VITE_ADMIN_USERNAME) {
-                console.error('ERROR: VITE_ADMIN_USERNAME and/or VITE_ADMIN_PASSWORD environment variables are not set.');
+            if (!config.auth.admin.username || !config.auth.admin.password) {
+                console.error('ERROR: Admin username and/or password are not set in the configuration.');
                 console.error('Admin user creation skipped for security reasons.');
                 return;
             }
 
             const hashedPassword = await bcrypt.hash(
-                process.env.VITE_ADMIN_PASSWORD,
+                config.auth.admin.password,
                 10
             );
 
             await User.create({
-                username: process.env.VITE_ADMIN_USERNAME,
+                username: config.auth.admin.username,
                 password: hashedPassword,
                 isAdmin: true
             });
@@ -189,23 +182,25 @@ const initPortfolioData = async () => {
 
         if (!portfolioExists) {
             await Portfolio.create({
-                profileImage: process.env.VITE_PROFILE_IMAGE_URL || 'photos/profile-pic.png',
-                cvViewUrl: process.env.VITE_CV_VIEW_URL,
-                cvDownloadUrl: process.env.VITE_CV_DOWNLOAD_URL,
+                // Initialize with empty values - these will be set through the admin panel
+                profileImage: '',
+                cvViewUrl: '',
+                cvDownloadUrl: '',
                 personalInfo: {
                     name: '',      // Will be loaded from LinkedIn API
                     title: '',     // Will be loaded from LinkedIn API
-                    email: process.env.VITE_CONTACT_EMAIL || '',     // Loaded from environment variable
+                    email: '',     // Set through admin panel
                     location: '',  // Will be loaded from LinkedIn API
                     bio: ''        // Will be loaded from LinkedIn API
                 },
                 socialLinks: {
-                    github: process.env.VITE_GITHUB_URL,
-                    linkedin: process.env.VITE_LINKEDIN_URL
+                    github: '',    // Set through admin panel
+                    linkedin: '',  // Set through admin panel
+                    twitter: ''    // Set through admin panel
                 }
             });
 
-            console.log('Portfolio data initialized');
+            console.log('Portfolio data initialized with empty values - use admin panel to configure');
         }
     } catch (error) {
         console.error('Error initializing portfolio data:', error);
@@ -234,8 +229,8 @@ app.post('/api/auth/login', async (req, res) => {
 
         const token = jwt.sign(
             { id: user._id, username: user.username, isAdmin: user.isAdmin },
-            process.env.JWT_SECRET || 'your_jwt_secret',
-            { expiresIn: '1d' }
+            config.auth.jwtSecret,
+            { expiresIn: config.auth.tokenExpiration }
         );
 
         res.json({ token, user: { id: user._id, username: user.username, isAdmin: user.isAdmin } });
@@ -260,7 +255,10 @@ const ensureFullUrls = (data) => {
         if (url.startsWith('http://') || url.startsWith('https://')) return url;
 
         if (url.startsWith('/uploads/')) {
-            return `${process.env.SERVER_URL || `http://${process.env.HOST || 'localhost'}:${PORT}`}${url}`;
+            // Use configured server URL or construct from environment
+            const serverUrl = config.uploads.serverUrl ||
+                `${config.server.isProduction ? 'https://' : 'http://'}${config.server.host}:${config.server.port}`;
+            return `${serverUrl}${url}`;
         }
 
         return url;
@@ -321,7 +319,9 @@ app.post('/api/portfolio/profile-image', verifyToken, isAdmin, upload.single('im
         }
 
         const imageUrl = `/uploads/${req.file.filename}`;
-        const fullImageUrl = `${req.protocol}://${req.get('host')}${imageUrl}`;
+
+        // Use configuration to get full image URL
+        const fullImageUrl = config.uploads.getFullUrl(req, imageUrl);
         console.log('Generated full image URL:', fullImageUrl);
 
         // Delete previous profile image if it exists
@@ -467,7 +467,9 @@ app.post('/api/projects/upload-image', verifyToken, isAdmin, upload.single('imag
         }
 
         const imageUrl = `/uploads/${req.file.filename}`;
-        const fullImageUrl = `${req.protocol}://${req.get('host')}${imageUrl}`;
+
+        // Use configuration to get full image URL
+        const fullImageUrl = config.uploads.getFullUrl(req, imageUrl);
         console.log('Generated full project image URL:', fullImageUrl);
 
         res.json({
@@ -493,7 +495,7 @@ app.post('/api/linkedin-profile', async (req, res) => {
         }
 
         console.log('Fetching LinkedIn profile using username: amr-elganainy');
-        const apiToken = process.env.VITE_APIFY_TOKEN;
+        const apiToken = config.services.apify.token;
 
         if (!apiToken || apiToken === 'your_apify_token_here') {
             console.error('API token missing or invalid');
@@ -639,9 +641,10 @@ app.post('/api/linkedin-profile', async (req, res) => {
 // Start the server
 const server = http.createServer(app);
 
-server.listen(PORT, '0.0.0.0', () => { // Listen on all interfaces for deployment
-    console.log(`Portfolio API server running on http://localhost:${PORT}`);
-    console.log(`Access the health check at http://localhost:${PORT}/api/health`);
+server.listen(config.server.port, config.server.host, () => {
+    console.log(`Portfolio API server running on http://${config.server.host === '0.0.0.0' ? 'localhost' : config.server.host}:${config.server.port}`);
+    console.log(`Access the health check at http://${config.server.host === '0.0.0.0' ? 'localhost' : config.server.host}:${config.server.port}/api/health`);
+    console.log(`Server running in ${config.server.nodeEnv} mode`);
     console.log('LinkedIn API Proxy is enabled with Apify integration');
-    console.log('API Token status:', process.env.VITE_APIFY_TOKEN ? 'Available' : 'Missing');
+    console.log('API Token status:', config.services.apify.token ? 'Available' : 'Missing');
 });

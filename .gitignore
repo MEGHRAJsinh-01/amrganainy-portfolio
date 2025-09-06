@@ -16,8 +16,11 @@ dist-ssr
 .env.local
 .env.production
 .env.development
+.env.production.frontend
+server/.env.production
 # Example files are tracked in git
 !.env.*.example
+!server/config/example.env.*
 
 # Editor directories and files
 .vscode/*
