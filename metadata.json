@@ -1,5 +1,15 @@
 {
-  "name": "amrganainy-portfolio",
-  "description": "Personal developer portfolio website for Amr Elganainy – a CS and Cybersecurity graduate, Android & cross-platform mobile developer. Showcases technical skills, major projects (with live demos/videos), and professional experience in both English and German. Interactive, modern, and built for recruiters and collaborators.\n",
-  "requestFramePermissions": []
+  "description": "Modern, responsive developer portfolio website that dynamically showcases skills and projects from GitHub repositories",
+  "topics": [
+    "react",
+    "typescript",
+    "tailwindcss",
+    "vite",
+    "portfolio",
+    "github-api",
+    "responsive-design",
+    "dark-theme",
+    "developer-portfolio",
+    "web-development"
+  ]
 }
