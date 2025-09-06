@@ -3,6 +3,11 @@ import { GITHUB_USERNAME, CACHE_KEY, CACHE_DURATION, FEATURED_REPOS, VISIBILITY_
 
 export const SKILLS_CACHE_KEY = 'github_skills_cache';
 
+export interface SkillsData {
+    programmingLanguages: string[];
+    otherSkills: string[];
+}
+
 export const fetchGitHubRepos = async (): Promise<GitHubRepo[]> => {
     try {
         const response = await fetch(`https://api.github.com/users/${GITHUB_USERNAME}/repos?sort=pushed&per_page=100`);
@@ -94,14 +99,14 @@ export const transformGitHubRepoToProject = (repo: GitHubRepo, language: string)
             de: repo.description || `Ein ${repo.language || 'Software'} Projekt`
         };
         // Use topics from GitHub with proper formatting
-        tags = repo.topics && repo.topics.length > 0 ? 
-            repo.topics.map(topic => 
+        tags = repo.topics && repo.topics.length > 0 ?
+            repo.topics.map(topic =>
                 topic
                     .replace(/-/g, ' ')  // Replace hyphens with spaces
                     .split(' ')
                     .map(word => word.charAt(0).toUpperCase() + word.slice(1)) // Capitalize first letter of each word
                     .join(' ')
-            ) : 
+            ) :
             [repo.language || 'Project'];
     } else {
         // Generate tags from language and topics
@@ -111,7 +116,7 @@ export const transformGitHubRepoToProject = (repo: GitHubRepo, language: string)
         }
         if (repo.topics && repo.topics.length > 0) {
             // Format topics before adding them
-            const formattedTopics = repo.topics.slice(0, 3).map(topic => 
+            const formattedTopics = repo.topics.slice(0, 3).map(topic =>
                 topic
                     .replace(/-/g, ' ')  // Replace hyphens with spaces
                     .split(' ')
@@ -177,9 +182,17 @@ export const isProjectVisible = (repoName: string) => {
     return settings[repoName];
 };
 
+// List of common programming languages to separate from other skills
+const PROGRAMMING_LANGUAGES = [
+    "JavaScript", "TypeScript", "Python", "Java", "Kotlin", "C#", "C++", "C", "Swift", 
+    "Go", "Rust", "PHP", "Ruby", "Dart", "Scala", "R", "Objective-C", "Shell", 
+    "PowerShell", "HTML", "CSS", "SQL", "Perl", "Lua", "Haskell", "F#"
+];
+
 // --- Skills Extraction Functions ---
-export const extractSkillsFromRepos = (repos: GitHubRepo[]): string[] => {
+export const extractSkillsFromRepos = (repos: GitHubRepo[]): { programmingLanguages: string[], otherSkills: string[] } => {
     const skillCounts: { [key: string]: number } = {};
+    const languageCounts: { [key: string]: number } = {};
 
     repos.forEach(repo => {
         // Prioritize topics/tags (these often represent technologies/frameworks)
@@ -192,25 +205,45 @@ export const extractSkillsFromRepos = (repos: GitHubRepo[]): string[] => {
                     .split(' ')
                     .map(word => word.charAt(0).toUpperCase() + word.slice(1)) // Capitalize first letter of each word
                     .join(' ');
-                
-                skillCounts[formattedTopic] = (skillCounts[formattedTopic] || 0) + 1;
+
+                // Check if it's a programming language
+                if (PROGRAMMING_LANGUAGES.includes(formattedTopic)) {
+                    languageCounts[formattedTopic] = (languageCounts[formattedTopic] || 0) + 1;
+                } else {
+                    skillCounts[formattedTopic] = (skillCounts[formattedTopic] || 0) + 1;
+                }
             });
         }
-        
+
         // Include programming languages if not already in topics
-        if (repo.language && !skillCounts[repo.language]) {
-            skillCounts[repo.language] = (skillCounts[repo.language] || 0) + 1;
+        if (repo.language) {
+            if (PROGRAMMING_LANGUAGES.includes(repo.language)) {
+                languageCounts[repo.language] = (languageCounts[repo.language] || 0) + 1;
+            } else {
+                skillCounts[repo.language] = (skillCounts[repo.language] || 0) + 1;
+            }
         }
-    });    // Sort skills by frequency and return top skills
+    });
+    
+    // Sort languages by frequency
+    const sortedLanguages = Object.entries(languageCounts)
+        .sort(([, a], [, b]) => b - a)
+        .map(([language]) => language)
+        .slice(0, 15); // Top 15 programming languages
+        
+    // Sort skills by frequency
     const sortedSkills = Object.entries(skillCounts)
         .sort(([, a], [, b]) => b - a)
         .map(([skill]) => skill)
-        .slice(0, 30); // Increased to top 30 skills for more variety
+        .slice(0, 20); // Top 20 other skills
 
-    return sortedSkills;
+    return {
+        programmingLanguages: sortedLanguages,
+        otherSkills: sortedSkills
+    };
 };
 
-export const getCachedSkills = (): string[] | null => {
+export const getCachedSkills = (): SkillsData | null => {
     try {
         const cached = localStorage.getItem(SKILLS_CACHE_KEY);
         if (!cached) return null;
@@ -230,7 +263,7 @@ export const getCachedSkills = (): string[] | null => {
     }
 };
 
-export const setCachedSkills = (skills: string[]): void => {
+export const setCachedSkills = (skills: SkillsData): void => {
     try {
         const cacheData = {
             data: skills,
@@ -242,7 +275,7 @@ export const setCachedSkills = (skills: string[]): void => {
     }
 };
 
-export const getDynamicSkills = async (): Promise<string[]> => {
+export const getDynamicSkills = async (): Promise<SkillsData> => {
     try {
         // Try to get cached skills first
         const cachedSkills = getCachedSkills();
@@ -260,8 +293,11 @@ export const getDynamicSkills = async (): Promise<string[]> => {
         return dynamicSkills;
     } catch (error) {
         console.error('Error fetching dynamic skills:', error);
-        // Return empty array if GitHub API fails
-        return [];
+        // Return empty arrays if GitHub API fails
+        return {
+            programmingLanguages: [],
+            otherSkills: []
+        };
     }
 };
 

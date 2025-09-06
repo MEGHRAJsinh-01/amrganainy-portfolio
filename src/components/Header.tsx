@@ -18,8 +18,13 @@ const Header: React.FC<HeaderProps> = ({ language, setLanguage }) => (
                 </ul>
                 <button
                     onClick={() => setLanguage(language === 'en' ? 'de' : 'en')}
-                    className="px-3 py-1 bg-gray-800 border border-gray-700 rounded-md text-sm font-medium hover:bg-gray-700 transition-colors"
+                    className="px-3 py-1 bg-gray-800 border border-gray-700 rounded-md text-sm font-medium hover:bg-gray-700 transition-colors flex items-center gap-2"
                 >
+                    <img 
+                        src={`/flags/${language === 'en' ? 'de' : 'gb'}.svg`} 
+                        alt={language === 'en' ? 'German flag' : 'British flag'} 
+                        className="w-5 h-3.5 object-cover rounded-sm"
+                    />
                     {language === 'en' ? 'DE' : 'EN'}
                 </button>
             </div>

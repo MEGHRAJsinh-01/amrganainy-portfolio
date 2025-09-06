@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { translations, personalInfo } from '../constants';
-import { getDynamicSkills, clearSkillsCache } from '../githubService';
+import { getDynamicSkills, clearSkillsCache, SkillsData } from '../githubService';
 
 interface AboutProps {
     language: string;
 }
 
 const About: React.FC<AboutProps> = ({ language }) => {
-    const [skills, setSkills] = useState<string[]>([]);
+    const [skills, setSkills] = useState<SkillsData>({
+        programmingLanguages: [],
+        otherSkills: []
+    });
 
     useEffect(() => {
         const loadSkills = async () => {
@@ -110,17 +113,36 @@ const About: React.FC<AboutProps> = ({ language }) => {
                     </div>
                 </div>
 
-                {/* Skills Section */}
+                {/* Programming Languages Section */}
+                <div className="bg-gray-800/30 backdrop-blur-sm border border-gray-700 rounded-xl p-8 mb-8">
+                    <div className="flex items-center gap-3 mb-8">
+                        <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                            <span className="material-symbols-outlined text-blue-400">code</span>
+                        </div>
+                        <h3 className="text-white text-2xl font-bold">{translations[language].about.programmingLanguages}</h3>
+                    </div>
+                    <div className="flex gap-3 flex-wrap">
+                        {skills.programmingLanguages.map(lang => (
+                            <div key={lang} className="flex items-center justify-center gap-x-2 rounded-full bg-gradient-to-r from-blue-900/50 to-blue-800/30 px-4 py-2 border border-blue-800/50 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-300">
+                                <p className="text-gray-300 text-sm font-medium leading-normal">
+                                    {lang}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+                
+                {/* Other Skills Section */}
                 <div className="bg-gray-800/30 backdrop-blur-sm border border-gray-700 rounded-xl p-8">
                     <div className="flex items-center gap-3 mb-8">
                         <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
-                            <span className="material-symbols-outlined text-purple-400">code</span>
+                            <span className="material-symbols-outlined text-purple-400">construction</span>
                         </div>
                         <h3 className="text-white text-2xl font-bold">{translations[language].about.skills}</h3>
                     </div>
                     <div className="flex gap-3 flex-wrap">
-                        {skills.map(skill => (
-                            <div key={skill} className="flex items-center justify-center gap-x-2 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 px-4 py-2 border border-gray-600 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-300">
+                        {skills.otherSkills.map(skill => (
+                            <div key={skill} className="flex items-center justify-center gap-x-2 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 px-4 py-2 border border-gray-600 hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/20 transition-all duration-300">
                                 <p className="text-gray-300 text-sm font-medium leading-normal">
                                     {skill}
                                 </p>

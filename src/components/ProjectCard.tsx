@@ -68,8 +68,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, language, onVideoCli
     // Get primary language from tags (first programming language found) using case-insensitive comparison
     const getPrimaryLanguage = (tags: string[]) => {
         const programmingLanguages = [
-            'kotlin', 'java', 'python', 'flutter', 'dart', 
-            'typescript', 'javascript', 'react', 'node.js', 
+            'kotlin', 'java', 'python', 'flutter', 'dart',
+            'typescript', 'javascript', 'react', 'node.js',
             'html', 'css', 'shell', 'android'
         ];
         return tags.find(tag => programmingLanguages.includes(tag.toLowerCase())) || tags[0];

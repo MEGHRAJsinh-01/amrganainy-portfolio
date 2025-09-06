@@ -17,6 +17,7 @@ export const translations: Translations = {
             languages: "Languages:",
             german: "German: C1 Telc University Certificate",
             english: "English: B2",
+            programmingLanguages: "Programming Languages",
             skills: "My Skills"
         },
         projects: {
@@ -35,7 +36,11 @@ export const translations: Translations = {
                 subjectPlaceholder: "What's this about?",
                 message: "Your Message",
                 messagePlaceholder: "Let me know how I can help.",
-                submit: "Send Message"
+                submit: "Send Message",
+                sending: "Sending...",
+                successMessage: "Thank you! Your message has been sent successfully.",
+                errorMessage: "Sorry, there was an error sending your message. Please try again.",
+                validationError: "Please fill in all required fields"
             }
         },
         footer: {
@@ -57,6 +62,7 @@ export const translations: Translations = {
             languages: "Sprachen:",
             german: "Deutsch: C1 Telc Hochschulzertifikat",
             english: "Englisch: B2",
+            programmingLanguages: "Programmiersprachen",
             skills: "Meine Fähigkeiten"
         },
         projects: {
@@ -75,7 +81,11 @@ export const translations: Translations = {
                 subjectPlaceholder: "Worum geht es?",
                 message: "Ihre Nachricht",
                 messagePlaceholder: "Lassen Sie mich wissen, wie ich helfen können.",
-                submit: "Nachricht senden"
+                submit: "Nachricht senden",
+                sending: "Senden...",
+                successMessage: "Vielen Dank! Ihre Nachricht wurde erfolgreich gesendet.",
+                errorMessage: "Entschuldigung, beim Senden Ihrer Nachricht ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.",
+                validationError: "Bitte füllen Sie alle erforderlichen Felder aus"
             }
         },
         footer: {

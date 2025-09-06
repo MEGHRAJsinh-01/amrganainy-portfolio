@@ -31,85 +31,55 @@ export interface Project {
     imageUrl?: string;
 }
 
+export interface FormTranslation {
+    name: string;
+    namePlaceholder: string;
+    email: string;
+    emailPlaceholder: string;
+    subject: string;
+    subjectPlaceholder: string;
+    message: string;
+    messagePlaceholder: string;
+    submit: string;
+    sending?: string;
+    successMessage?: string;
+    errorMessage?: string;
+    validationError?: string;
+}
+
+export interface LanguageTranslation {
+    nav: {
+        about: string;
+        projects: string;
+        contact: string;
+    };
+    about: {
+        title: string;
+        bio: string;
+        education: string;
+        master: string;
+        bachelor: string;
+        languages: string;
+        german: string;
+        english: string;
+        programmingLanguages: string;
+        skills: string;
+    };
+    projects: {
+        title: string;
+        subtitle: string;
+    };
+    contact: {
+        title: string;
+        subtitle: string;
+        form: FormTranslation;
+    };
+    footer: {
+        copyright: string;
+    };
+}
+
 export interface Translations {
-    en: {
-        nav: {
-            about: string;
-            projects: string;
-            contact: string;
-        };
-        about: {
-            title: string;
-            bio: string;
-            education: string;
-            master: string;
-            bachelor: string;
-            languages: string;
-            german: string;
-            english: string;
-            skills: string;
-        };
-        projects: {
-            title: string;
-            subtitle: string;
-        };
-        contact: {
-            title: string;
-            subtitle: string;
-            form: {
-                name: string;
-                namePlaceholder: string;
-                email: string;
-                emailPlaceholder: string;
-                subject: string;
-                subjectPlaceholder: string;
-                message: string;
-                messagePlaceholder: string;
-                submit: string;
-            };
-        };
-        footer: {
-            copyright: string;
-        };
-    };
-    de: {
-        nav: {
-            about: string;
-            projects: string;
-            contact: string;
-        };
-        about: {
-            title: string;
-            bio: string;
-            education: string;
-            master: string;
-            bachelor: string;
-            languages: string;
-            german: string;
-            english: string;
-            skills: string;
-        };
-        projects: {
-            title: string;
-            subtitle: string;
-        };
-        contact: {
-            title: string;
-            subtitle: string;
-            form: {
-                name: string;
-                namePlaceholder: string;
-                email: string;
-                emailPlaceholder: string;
-                subject: string;
-                subjectPlaceholder: string;
-                message: string;
-                messagePlaceholder: string;
-                submit: string;
-            };
-        };
-        footer: {
-            copyright: string;
-        };
-    };
+    en: LanguageTranslation;
+    de: LanguageTranslation;
 }
