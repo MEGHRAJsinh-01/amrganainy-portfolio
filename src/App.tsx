@@ -5,6 +5,8 @@ import Projects from './components/Projects';
 import Contact from './components/Contact';
 import Footer from './components/Footer';
 import AdminPanel from './components/AdminPanel';
+import CVSection from './components/CVSection';
+import { clearLinkedInCache, clearGitHubCache, clearSkillsCache } from './githubService';
 
 const App: React.FC = () => {
     const [language, setLanguage] = useState('en');
@@ -29,8 +31,15 @@ const App: React.FC = () => {
             // Clear GitHub cache with Ctrl+Shift+C
             if (e.ctrlKey && e.shiftKey && e.key === 'C') {
                 e.preventDefault();
-                localStorage.removeItem('github_projects_cache');
-                alert('GitHub cache cleared! Refresh the page to reload projects.');
+                clearGitHubCache();
+                clearSkillsCache();
+                alert('GitHub cache cleared! Refresh the page to reload projects and skills.');
+            }
+            // Clear Bio cache with Ctrl+Alt+C
+            if (e.ctrlKey && e.altKey && e.key === 'c') {
+                e.preventDefault();
+                clearLinkedInCache();
+                alert('Bio cache cleared! Refresh the page to reload your bio from GitHub.');
             }
         };
 
@@ -52,6 +61,7 @@ const App: React.FC = () => {
             <main className="flex flex-col gap-0">
                 <About language={language} />
                 <Projects language={language} />
+                <CVSection language={language} />
                 <Contact language={language} />
             </main>
             <Footer language={language} showAdminLink={showAdminLink} onAdminClick={() => {

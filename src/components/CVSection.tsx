@@ -1,0 +1,116 @@
+import React, { useState, useEffect } from 'react';
+import { translations, personalInfo } from '../constants';
+import { portfolioAPI } from '../api';
+import { Portfolio } from '../types';
+
+interface CVSectionProps {
+    language: string;
+}
+
+const CVSection: React.FC<CVSectionProps> = ({ language }) => {
+    const [portfolioData, setPortfolioData] = useState<Portfolio | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [downloadClicked, setDownloadClicked] = useState(false);
+
+    useEffect(() => {
+        const fetchPortfolioData = async () => {
+            try {
+                setLoading(true);
+                const data = await portfolioAPI.getPortfolio();
+                setPortfolioData(data);
+                setError(null);
+            } catch (err) {
+                console.error('Error fetching portfolio data:', err);
+                setError('Failed to load CV data. Using fallback values.');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchPortfolioData();
+    }, []);
+
+    // Use data from API if available, otherwise fall back to constants
+    const viewCvUrl = portfolioData?.cvViewUrl || personalInfo.cvUrl;
+    const downloadCvUrl = portfolioData?.cvDownloadUrl || personalInfo.cvPdfUrl;
+
+    if (loading) {
+        return (
+            <section id="cv" className="py-20 px-4">
+                <div className="max-w-7xl mx-auto text-center">
+                    <div className="animate-pulse">
+                        <div className="h-8 bg-gray-700 rounded w-1/3 mx-auto mb-4"></div>
+                        <div className="h-4 bg-gray-700 rounded w-2/3 mx-auto mb-8"></div>
+                        <div className="flex justify-center gap-4">
+                            <div className="h-12 bg-gray-700 rounded w-40"></div>
+                            <div className="h-12 bg-gray-700 rounded w-40"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        );
+    }
+
+    return (
+        <section id="cv" className="py-20 px-4">
+            <div className="max-w-7xl mx-auto">
+                <div className="text-center mb-12">
+                    <h2 className="text-3xl md:text-4xl font-bold text-white tracking-tighter mb-4">
+                        {translations[language].about.cv}
+                    </h2>
+                    <p className="max-w-2xl mx-auto text-lg text-gray-400">
+                        {language === 'de'
+                            ? 'Hier können Sie meinen Lebenslauf einsehen oder herunterladen.'
+                            : 'View or download my CV to learn more about my education and experience.'}
+                    </p>
+                    {error && (
+                        <div className="text-amber-400 mt-2 text-sm">
+                            <span className="material-symbols-outlined mr-1 text-sm align-middle">info</span>
+                            {error}
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex flex-col items-center">
+                    <div className="bg-gray-800/30 backdrop-blur-sm border border-gray-700 rounded-xl p-8 mb-8 max-w-2xl w-full">
+                        <div className="flex flex-col md:flex-row justify-center gap-4">
+                            <a
+                                href={viewCvUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center justify-center px-6 py-3 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors duration-200"
+                            >
+                                <span className="material-symbols-outlined mr-2">visibility</span>
+                                {translations[language].about.viewCV}
+                            </a>
+
+                            <a
+                                href={downloadCvUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={() => setDownloadClicked(true)}
+                                className="inline-flex items-center justify-center px-6 py-3 rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors duration-200"
+                            >
+                                <span className="material-symbols-outlined mr-2">download</span>
+                                {translations[language].about.downloadCV}
+                            </a>
+
+                            {downloadClicked && (
+                                <div className="text-center mt-4 text-sm text-gray-400">
+                                    <p>
+                                        {language === 'de'
+                                            ? 'Falls der Download nicht automatisch startet, überprüfen Sie bitte Ihre Popup-Einstellungen oder versuchen Sie es erneut.'
+                                            : 'If the download does not start automatically, please check your popup settings or try again.'}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    );
+};
+
+export default CVSection;

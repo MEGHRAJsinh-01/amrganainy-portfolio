@@ -6,19 +6,18 @@ export const translations: Translations = {
         nav: {
             about: "About",
             projects: "Projects",
-            contact: "Contact"
+            contact: "Contact",
+            cv: "CV"
         },
         about: {
             title: "CS Graduate & Cyber Security Master Student",
-            bio: "Junior Android and cross-platform mobile developer with solid project experience. I love turning ideas into functional apps, am a team player, and always ready to learn. As a CS graduate and Cyber Security master's student, I'm currently writing my master's thesis.",
             education: "Education:",
-            master: "Master in Internet Security, Westfälische Hochschule (2022 - present, Grade: 2.2)",
-            bachelor: "Bachelor in Computer Science, Mansoura University, Egypt (2015 - 2019, Grade: 2.3)",
             languages: "Languages:",
-            german: "German: C1 Telc University Certificate",
-            english: "English: B2",
             programmingLanguages: "Programming Languages",
-            skills: "My Skills"
+            skills: "My Skills",
+            cv: "My CV",
+            viewCV: "View CV",
+            downloadCV: "Download CV"
         },
         projects: {
             title: "Projects",
@@ -51,19 +50,18 @@ export const translations: Translations = {
         nav: {
             about: "Über mich",
             projects: "Projekte",
-            contact: "Kontakt"
+            contact: "Kontakt",
+            cv: "Lebenslauf"
         },
         about: {
             title: "CS Graduate & Cyber Security Master Student",
-            bio: "Junior Android- und cross-platform Mobile-Entwickler mit fundierter Projekterfahrung. Ich liebe es, Ideen in funktionierende Apps umzusetzen, bin Teamplayer und immer bereit, mehr zu lernen. Als CS-Absolvent und Master-Student in Cyber Security schreibe ich derzeit meine Masterarbeit.",
             education: "Ausbildung:",
-            master: "Master in Internet-Sicherheit, Westfälische Hochschule (2022 - heute, Note: 2,2)",
-            bachelor: "Bachelor in Informatik, Mansoura Universität, Ägypten (2015 - 2019, Note: 2,3)",
             languages: "Sprachen:",
-            german: "Deutsch: C1 Telc Hochschulzertifikat",
-            english: "Englisch: B2",
             programmingLanguages: "Programmiersprachen",
-            skills: "Meine Fähigkeiten"
+            skills: "Meine Fähigkeiten",
+            cv: "Mein Lebenslauf",
+            viewCV: "Lebenslauf anzeigen",
+            downloadCV: "Lebenslauf herunterladen"
         },
         projects: {
             title: "Projekte",
@@ -95,14 +93,14 @@ export const translations: Translations = {
 };
 
 // --- Data ---
+// Default values that will be overridden by API data when loaded
 export const personalInfo = {
     name: "Amr Elganainy",
     title: "CS Graduate & Cyber Security Master Student",
-    bio: {
-        en: "Junior Android and cross-platform mobile developer with solid project experience. I love turning ideas into functional apps, am a team player, and always ready to learn. As a CS graduate and Cyber Security master's student, I'm currently writing my master's thesis.",
-        de: "Junior Android- und cross-platform Mobile-Entwickler mit fundierter Projekterfahrung. Ich liebe es, Ideen in funktionierende Apps umzusetzen, bin Teamplayer und immer bereit, mehr zu lernen. Als CS-Absolvent und Master-Student in Cyber Security schreibe ich derzeit meine Masterarbeit."
-    },
-    imageUrl: "photos/profile-pic.png",
+    imageUrl: import.meta.env.VITE_PROFILE_IMAGE_URL || "", // Default fallback
+    // CV URLs loaded from environment variables (fallback)
+    cvUrl: import.meta.env.VITE_CV_VIEW_URL || "",
+    cvPdfUrl: import.meta.env.VITE_CV_DOWNLOAD_URL || "",
     contact: {
         email: "amrmohammedali11@gmail.com",
         linkedin: "https://www.linkedin.com/in/amr-elganainy/",
@@ -111,14 +109,6 @@ export const personalInfo = {
         address: "44143, Dortmund"
     }
 };
-
-export const skills = [
-    'Java', 'Kotlin', 'Dart', 'Python',
-    'Restful APIs', 'Firebase Services', 'Jetpack', 'MVVM', 'XML', 'Kotlin Compose',
-    'Coroutines', 'Database', 'Work Manager', 'Play Console', 'Social SDKs', 'Adaptive UI',
-    'Android Studio', 'Visual Studio Code', 'Git', 'GitHub', 'Linux',
-    'AI/ML', 'Appium', 'Security Analysis', 'Privacy Evaluation'
-];
 
 // Featured repositories that should be treated as manual projects
 export const FEATURED_REPOS = [
@@ -138,3 +128,4 @@ export const CACHE_KEY = 'github_projects_cache';
 export const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 export const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD || 'admin123'; // Fallback for development
 export const VISIBILITY_KEY = 'project_visibility_settings';
+export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';

@@ -18,17 +18,43 @@ export interface CachedData {
 }
 
 export interface Project {
-    title: { en: string; de: string };
-    description: { en: string; de: string };
-    tags: string[];
+    id?: string;
+    title: { en: string; de: string } | string;
+    description: { en: string; de: string } | string;
+    tags: string[] | string[];
     liveUrl: string;
     repoUrl: string;
-    lastUpdated: string;
-    stars: number;
-    forks: number;
+    lastUpdated?: string;
+    stars?: number;
+    forks?: number;
     isFeatured?: boolean;
     videoUrl?: string;
     imageUrl?: string;
+    technologies?: string[];
+    featured?: boolean;
+    order?: number;
+    githubUrl?: string;
+}
+
+// Database Portfolio Interface
+export interface Portfolio {
+    profileImage?: string;
+    cvViewUrl?: string;
+    cvDownloadUrl?: string;
+    personalInfo?: {
+        name?: string;
+        title?: string;
+        email?: string;
+        phone?: string;
+        location?: string;
+        bio?: string;
+    };
+    socialLinks?: {
+        github?: string;
+        linkedin?: string;
+        twitter?: string;
+    };
+    lastUpdated?: Date | string;
 }
 
 export interface FormTranslation {
@@ -52,18 +78,22 @@ export interface LanguageTranslation {
         about: string;
         projects: string;
         contact: string;
+        cv: string;
     };
     about: {
         title: string;
-        bio: string;
+        bio?: string;            // Now optional since it comes from LinkedIn
         education: string;
-        master: string;
-        bachelor: string;
+        master?: string;         // Now optional since it comes from LinkedIn 
+        bachelor?: string;       // Now optional since it comes from LinkedIn
         languages: string;
-        german: string;
-        english: string;
+        german?: string;         // Now optional since it comes from LinkedIn
+        english?: string;        // Now optional since it comes from LinkedIn
         programmingLanguages: string;
         skills: string;
+        cv: string;
+        viewCV: string;
+        downloadCV: string;
     };
     projects: {
         title: string;
@@ -82,4 +112,83 @@ export interface LanguageTranslation {
 export interface Translations {
     en: LanguageTranslation;
     de: LanguageTranslation;
+}
+
+// LinkedIn Profile Data Interfaces
+export interface LinkedInSkill {
+    name?: string;
+}
+
+export interface LinkedInExperience {
+    title?: string;
+    company?: string;
+    companyName?: string;
+    description?: string;
+    location?: string;
+    startDate?: string;
+    endDate?: string;
+}
+
+export interface LinkedInEducation {
+    school?: string;
+    schoolName?: string;
+    degree?: string;
+    fieldOfStudy?: string;
+    startDate?: string;
+    endDate?: string;
+}
+
+export interface LinkedInProfileData {
+    name?: string;
+    headline?: string;
+    summary?: string;
+    about?: string;
+    description?: string;
+    bio?: string;
+    location?: string;
+    experiences?: LinkedInExperience[];
+    education?: LinkedInEducation[];
+    skills?: LinkedInSkill[];
+    public_identifier?: string;
+    profile_pic_url?: string;
+    background_cover_image_url?: string;
+}
+
+export interface LinkedInAdditionalProfileData {
+    fullName?: string;
+    headline?: string;
+    summary?: string;
+    about?: string;
+    geoLocationName?: string;
+    skills?: (LinkedInSkill | string)[];
+    experiences?: LinkedInExperience[];
+    education?: LinkedInEducation[];
+    certifications?: {
+        name?: string;
+        issuer?: string;
+        issueDate?: string;
+    }[];
+    recommendations?: any[];
+}
+
+export interface LinkedInCacheData {
+    profileData: LinkedInProfileData;
+    timestamp: number;
+}
+
+export interface LinkedInAdditionalCacheData {
+    additionalProfileData: LinkedInAdditionalProfileData;
+    timestamp: number;
+}
+
+// Auth Types
+export interface User {
+    id: string;
+    username: string;
+    isAdmin: boolean;
+}
+
+export interface AuthResponse {
+    token: string;
+    user: User;
 }

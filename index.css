@@ -7,3 +7,12 @@ html {
   scroll-behavior: smooth;
   scroll-padding-top: 4rem;
 }
+
+/* Markdown styles for bio */
+.markdown-bio strong {
+  @apply font-bold text-white;
+}
+
+.markdown-bio p {
+  @apply text-gray-300;
+}

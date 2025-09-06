@@ -14,6 +14,7 @@ const Header: React.FC<HeaderProps> = ({ language, setLanguage }) => (
                 <ul className="flex gap-8">
                     <li><a href="#about" className="text-gray-400 hover:text-blue-400 transition-colors">{translations[language].nav.about}</a></li>
                     <li><a href="#projects" className="text-gray-400 hover:text-blue-400 transition-colors">{translations[language].nav.projects}</a></li>
+                    <li><a href="#cv" className="text-gray-400 hover:text-blue-400 transition-colors">{translations[language].nav.cv}</a></li>
                     <li><a href="#contact" className="text-gray-400 hover:text-blue-400 transition-colors">{translations[language].nav.contact}</a></li>
                 </ul>
                 <button
