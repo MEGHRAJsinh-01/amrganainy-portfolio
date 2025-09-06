@@ -1,20 +1,84 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Amr Elganainy Portfolio
 
-# Run and deploy your AI Studio app
+A modern, responsive portfolio website built with React, TypeScript, and Tailwind CSS.
 
-This contains everything you need to run your app locally.
+## Features
 
-View your app in AI Studio: https://ai.studio/apps/drive/1iaD2YmhF7RPZ2-YfklOhQoUcEUDRdsvv
+- **Dynamic Skills**: Automatically extracts and displays skills from GitHub repositories
+- **Project Showcase**: Displays GitHub projects with stars, forks, and descriptions
+- **Admin Panel**: Control project visibility and manage cache
+- **Responsive Design**: Mobile-first design with Tailwind CSS
+- **Dark Theme**: Modern dark theme optimized for developer portfolios
 
-## Run Locally
+## Tech Stack
 
-**Prerequisites:**  Node.js
+- **Frontend**: React 19, TypeScript
+- **Styling**: Tailwind CSS (production-ready setup)
+- **Build Tool**: Vite
+- **API**: GitHub API for dynamic content
 
+## Development Setup
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+### Prerequisites
+- Node.js (v16 or higher)
+- npm or yarn
+
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/ganainy/amrganainy-portfolio.git
+   cd amrganainy-portfolio
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+4. Open [http://localhost:5173](http://localhost:5173) in your browser
+
+## Production Build
+
+```bash
+npm run build
+npm run preview
+```
+
+## Tailwind CSS Setup
+
+This project uses Tailwind CSS with proper production configuration:
+
+- **PostCSS**: Configured with `@tailwindcss/postcss` plugin
+- **Autoprefixer**: Automatic vendor prefixing
+- **Content Scanning**: Scans all `.tsx`, `.ts`, `.jsx`, `.js` files in `src/` and `index.html`
+
+## Project Structure
+
+```
+src/
+├── components/          # React components
+│   ├── About.tsx       # About section with dynamic skills
+│   ├── Projects.tsx    # Projects showcase
+│   ├── AdminPanel.tsx  # Admin controls
+│   └── ...
+├── constants.ts        # Static data and translations
+├── githubService.ts    # GitHub API integration
+├── types.ts           # TypeScript interfaces
+└── App.tsx           # Main application component
+```
+
+## Admin Panel
+
+Access the admin panel by adding `#admin` to the URL. Use password `admin123` (or set `VITE_ADMIN_PASSWORD` environment variable).
+
+Features:
+- Control project visibility
+- Clear GitHub cache
+- Clear skills cache
+- Manage featured repositories
