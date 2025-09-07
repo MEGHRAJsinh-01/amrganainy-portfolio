@@ -6,10 +6,20 @@ export default defineConfig(({ mode }) => {
   // Load environment variables from the correct file based on mode
   const envFile = mode === 'production' ? '.env.production.frontend' : '.env.local';
 
-  // Make sure the env file exists, fallback to .env.local if not
-  const env = fs.existsSync(envFile)
-    ? loadEnv(mode, '.', ['VITE_', 'API_', 'GEMINI_'])
-    : loadEnv(mode, '.', ['VITE_', 'API_', 'GEMINI_']);
+  // Load environment variables from the client directory
+  const clientEnvPath = '.';
+
+  // Check if env file exists in client directory
+  let env: Record<string, string> = { GEMINI_API_KEY: '' };
+  if (fs.existsSync(envFile)) {
+    env = loadEnv(mode, clientEnvPath, ['VITE_', 'API_', 'GEMINI_']);
+  } else {
+    // Fallback to checking .env.local
+    const fallbackFile = '.env.local';
+    if (fs.existsSync(fallbackFile)) {
+      env = loadEnv(mode, clientEnvPath, ['VITE_', 'API_', 'GEMINI_']);
+    }
+  }
 
   return {
     define: {

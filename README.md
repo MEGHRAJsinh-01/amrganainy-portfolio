@@ -50,7 +50,7 @@ A modern, responsive portfolio website built with React, TypeScript, and Tailwin
 - npm or yarn
 - MongoDB (local or Atlas)
 
-### Frontend Setup
+### Setup
 
 1. Clone the repository:
    ```bash
@@ -58,40 +58,33 @@ A modern, responsive portfolio website built with React, TypeScript, and Tailwin
    cd amrganainy-portfolio
    ```
 
-2. Install dependencies:
+2. Install all dependencies at once (client and server):
    ```bash
-   npm install
+   npm run install-all
    ```
 
 3. Set up environment variables:
-   - Copy `.env.example` to `.env.local`
+   - Copy `.env.example` to `.env.local` in the root directory
+   - Copy `.env.example` to `.env.local` in the client directory
    - Fill in the required environment variables (see Environment Variables section)
 
-4. Start the development server:
+4. Start both the frontend and backend:
    ```bash
+   npm start
+   ```
+
+5. Or start them separately:
+   ```bash
+   # Start just the frontend
    npm run dev
+   
+   # Start just the backend (from the root directory)
+   cd server && npm start
    ```
 
-5. Open [http://localhost:5173](http://localhost:5173) in your browser
+6. Open [http://localhost:5174](http://localhost:5174) in your browser
 
-### Backend Setup
 
-1. Navigate to the server directory:
-   ```bash
-   cd server
-   ```
-
-2. Install server dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Start the backend server:
-   ```bash
-   npm run dev
-   ```
-
-4. The server will run on port 3000 by default
 
 ## 🛡️ Environment Configuration System
 
@@ -251,25 +244,31 @@ The portfolio uses Apify to fetch LinkedIn profile data:
 ## 🏗️ Project Structure
 
 ```
-├── public/            # Static assets
+├── client/            # Frontend application
+│   ├── public/        # Static assets
+│   ├── src/
+│   │   ├── api.ts     # API client for backend communication
+│   │   ├── components/ # React components
+│   │   │   ├── About.tsx # About section with LinkedIn data
+│   │   │   ├── AdminPanel.tsx # Admin controls
+│   │   │   ├── Contact.tsx # Contact form with EmailJS
+│   │   │   ├── CVSection.tsx # CV view/download section
+│   │   │   ├── Header.tsx # Navigation header
+│   │   │   ├── Projects.tsx # GitHub projects showcase
+│   │   │   └── ...       # Other components
+│   │   ├── constants.ts  # Static data and translations
+│   │   ├── githubService.ts # GitHub and LinkedIn API integration
+│   │   ├── types.ts     # TypeScript interfaces
+│   │   └── App.tsx     # Main application component
+│   ├── index.tsx       # Entry point
+│   ├── index.html      # HTML template
+│   ├── vite.config.ts  # Vite configuration
+│   └── .env.local      # Frontend environment variables (not in repo)
 ├── server/            # Backend server
 │   ├── uploads/       # Uploaded files directory
-│   └── server.js      # Express server implementation
-├── src/
-│   ├── api.ts         # API client for backend communication
-│   ├── components/    # React components
-│   │   ├── About.tsx  # About section with LinkedIn data
-│   │   ├── AdminPanel.tsx # Admin controls
-│   │   ├── Contact.tsx # Contact form with EmailJS
-│   │   ├── CVSection.tsx # CV view/download section
-│   │   ├── Header.tsx # Navigation header
-│   │   ├── Projects.tsx # GitHub projects showcase
-│   │   └── ...        # Other components
-│   ├── constants.ts   # Static data and translations
-│   ├── githubService.ts # GitHub and LinkedIn API integration
-│   ├── types.ts       # TypeScript interfaces
-│   └── App.tsx        # Main application component
-└── .env.local         # Environment variables (not in repo)
+│   ├── server.js      # Express server implementation
+│   └── .env.production # Backend environment variables (not in repo)
+└── package.json       # Root package.json with scripts to run both client and server
 ```
 
 ## 🔄 Data Caching
