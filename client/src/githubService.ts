@@ -295,12 +295,12 @@ export const clearSkillsCache = () => {
 };
 
 // --- LinkedIn Profile Bio Functions ---
-export const LINKEDIN_USERNAME = 'amr-elganainy';
-export const LINKEDIN_PROFILE_URL = 'https://www.linkedin.com/in/amr-elganainy/';
-export const LINKEDIN_CACHE_KEY = 'linkedin_profile_cache';
-export const LINKEDIN_ADDITIONAL_CACHE_KEY = 'linkedin_profile_additional_cache';
-export const LINKEDIN_COMPANY_CACHE_KEY = 'linkedin_company_cache';
-export const APIFY_ACTOR_ID = 'apify/linkedin-profile-scraper';
+export const LINKEDIN_USERNAME = '';
+export const LINKEDIN_PROFILE_URL = '';
+export const LINKEDIN_CACHE_KEY = '';
+export const LINKEDIN_ADDITIONAL_CACHE_KEY = '';
+export const LINKEDIN_COMPANY_CACHE_KEY = '';
+export const APIFY_ACTOR_ID = '';
 export const CACHE_DURATION_LONG = 7 * 24 * 60 * 60 * 1000; // 7 days for LinkedIn data
 
 // Helper function to get language code from language name

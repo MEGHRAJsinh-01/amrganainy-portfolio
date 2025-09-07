@@ -12,9 +12,9 @@ console.log(`Loading configuration for environment: ${environment}`);
 
 // Define the paths to the environment files
 const ENV_PATHS = {
-    development: path.resolve(__dirname, '../../.env.local'),
+    development: path.resolve(__dirname, '../.env.local'),
     production: path.resolve(__dirname, '../.env.production'),
-    test: path.resolve(__dirname, '../../.env.test')
+    test: path.resolve(__dirname, '../.env.test')
 };
 
 // Load environment variables from the appropriate file
@@ -51,11 +51,11 @@ const config = {
     // Frontend URLs
     frontend: {
         url: process.env.FRONTEND_URL || (environment === 'development'
-            ? 'http://localhost:5173'
+            ? 'http://localhost:5174'
             : 'https://yourproductionurl.com'),
         // Development allowed origins
         corsOrigins: [
-            process.env.FRONTEND_URL || 'http://localhost:5173',
+            process.env.FRONTEND_URL || 'http://localhost:5174',
             'http://localhost:3000',
             // You can add more origins here for different environments
             ...(process.env.ADDITIONAL_CORS_ORIGINS
