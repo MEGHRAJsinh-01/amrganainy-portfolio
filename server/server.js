@@ -491,13 +491,27 @@ app.post('/api/linkedin-profile', async (req, res) => {
 
         if (!profileUrl) {
             console.error('No profile URL provided');
-            return res.status(400).json({ error: 'Profile URL is required' });
+            return res.status(400).json({
+                error: 'Profile URL is required',
+                details: 'Please set your LinkedIn URL in the admin panel Social Links section'
+            });
         }
 
-        console.log('Fetching LinkedIn profile using username: amr-elganainy');
-        const apiToken = config.services.apify.token;
+        console.log('Fetching LinkedIn profile using username from URL:', profileUrl);
 
-        if (!apiToken || apiToken === 'your_apify_token_here') {
+        // Extract username from LinkedIn URL if it's a full URL
+        // URLs can be like: linkedin.com/in/username or linkedin.com/profile/view?id=...
+        let username = 'amr-elganainy'; // Default fallback
+
+        if (profileUrl.includes('/in/')) {
+            const match = profileUrl.match(/\/in\/([^\/\?]+)/);
+            if (match && match[1]) {
+                username = match[1];
+            }
+        }
+
+        console.log('Extracted LinkedIn username:', username);
+        const apiToken = config.services.apify.token; if (!apiToken || apiToken === 'your_apify_token_here') {
             console.error('API token missing or invalid');
             return res.status(500).json({
                 error: 'Apify API token is missing or invalid in server environment'

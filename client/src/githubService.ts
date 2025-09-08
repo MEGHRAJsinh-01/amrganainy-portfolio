@@ -12,7 +12,38 @@ export interface SkillsData {
 
 export const fetchGitHubRepos = async (): Promise<GitHubRepo[]> => {
     try {
-        const response = await fetch(`https://api.github.com/users/${GITHUB_USERNAME}/repos?sort=pushed&per_page=100`);
+        // Get GitHub username from database first, if available
+        let username = '';
+        try {
+            // Try to get portfolio data which contains social links
+            const portfolioResponse = await fetch(`${import.meta.env.VITE_API_URL}/portfolio`);
+            if (portfolioResponse.ok) {
+                const portfolioData = await portfolioResponse.json();
+                // Extract GitHub username from GitHub URL if available
+                if (portfolioData?.socialLinks?.github) {
+                    const githubUrl = portfolioData.socialLinks.github;
+                    // Extract username from GitHub URL
+                    const match = githubUrl.match(/github\.com\/([^\/]+)/);
+                    if (match && match[1]) {
+                        username = match[1];
+                    }
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching GitHub username from portfolio data:', err);
+        }
+
+        // Fallback to environment variable if not found in database
+        if (!username) {
+            username = GITHUB_USERNAME;
+        }
+
+        // If still no username, throw error
+        if (!username) {
+            throw new Error('GitHub username not configured. Please set it in the admin panel Social Links section.');
+        }
+
+        const response = await fetch(`https://api.github.com/users/${username}/repos?sort=pushed&per_page=100`);
         if (!response.ok) {
             throw new Error(`GitHub API error: ${response.status}`);
         }
@@ -326,7 +357,31 @@ const getLanguageCode = (languageName: string): string => {
 
 export const fetchLinkedInProfile = async (): Promise<LinkedInProfileData> => {
     try {
-        console.log('Fetching LinkedIn profile using proxy for:', LINKEDIN_PROFILE_URL);
+        // Get LinkedIn profile URL from portfolio data first, if available
+        let linkedinUrl = '';
+        try {
+            // Try to get portfolio data which contains social links
+            const portfolioResponse = await fetch(`${import.meta.env.VITE_API_URL}/portfolio`);
+            if (portfolioResponse.ok) {
+                const portfolioData = await portfolioResponse.json();
+                if (portfolioData?.socialLinks?.linkedin) {
+                    linkedinUrl = portfolioData.socialLinks.linkedin;
+                }
+            }
+        } catch (err) {
+            console.error('Error fetching LinkedIn URL from portfolio data:', err);
+        }
+
+        // Fallback to environment variable if not found in database
+        if (!linkedinUrl) {
+            linkedinUrl = import.meta.env.VITE_LINKEDIN_URL;
+        }
+
+        console.log('Fetching LinkedIn profile using proxy for:', linkedinUrl);
+
+        if (!linkedinUrl) {
+            throw new Error('LinkedIn profile URL is not configured in environment variables or admin panel');
+        }
 
         // Use our proxy server instead of calling Apify directly
         const proxyServerUrl = 'http://localhost:3000/api/linkedin-profile'; // Update this URL if your server runs on a different port
@@ -337,11 +392,9 @@ export const fetchLinkedInProfile = async (): Promise<LinkedInProfileData> => {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                profileUrl: LINKEDIN_PROFILE_URL
+                profileUrl: linkedinUrl
             })
-        });
-
-        if (!response.ok) {
+        }); if (!response.ok) {
             // Get detailed error message from the proxy server
             const errorData = await response.json();
             console.error('Proxy server error:', errorData);

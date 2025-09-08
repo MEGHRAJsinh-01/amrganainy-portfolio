@@ -84,7 +84,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
     const loadAllRepos = async () => {
         setIsLoading(true);
         try {
-            const response = await fetch(`https://api.github.com/users/ganainy/repos?sort=pushed&per_page=100`);
+            // Extract GitHub username from the GitHub URL
+            let username = 'ganainy'; // Default fallback
+
+            if (githubUrl) {
+                const match = githubUrl.match(/github\.com\/([^\/]+)/);
+                if (match && match[1]) {
+                    username = match[1];
+                }
+            }
+
+            const response = await fetch(`https://api.github.com/users/${username}/repos?sort=pushed&per_page=100`);
             if (!response.ok) {
                 throw new Error(`GitHub API error: ${response.status}`);
             }
