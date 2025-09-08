@@ -95,19 +95,16 @@ export const translations: Translations = {
 };
 
 // --- Data ---
-// EMERGENCY FALLBACK VALUES - These should only be used if API data completely fails to load
-// These values should never be used directly - always prefer data from LinkedIn API
 export const personalInfo = {
     name: "",
     title: "",
-    imageUrl: import.meta.env.VITE_PROFILE_IMAGE_URL || "", // Only used if no LinkedIn or portfolio image
-    // CV URLs loaded from environment variables (fallback)
-    cvUrl: import.meta.env.VITE_CV_VIEW_URL || "",
-    cvPdfUrl: import.meta.env.VITE_CV_DOWNLOAD_URL || "",
+    imageUrl: "",
+    cvUrl: "",
+    cvPdfUrl: "",
     contact: {
         email: "",
-        linkedin: import.meta.env.VITE_LINKEDIN_URL, // Only used to fetch LinkedIn data
-        github: import.meta.env.VITE_GITHUB_URL, // Only used to fetch GitHub data
+        linkedin: "",
+        github: "",
         phone: "",
         address: ""
     }
@@ -123,3 +120,8 @@ export const VISIBILITY_KEY = 'project_visibility_settings';
 // API URL configuration
 export const LOCAL_API_URL = 'http://localhost:3000/api';
 export const CLOUD_API_URL = 'https://amrganainy-portfolio-api.onrender.com/api';
+
+// Legacy API_URL export for backward compatibility
+// In production, use the cloud API, otherwise use local
+const isProd = import.meta.env.MODE === 'production';
+export const API_URL = isProd ? CLOUD_API_URL : LOCAL_API_URL;
