@@ -2,6 +2,12 @@
   command = "npm run build"
   publish = "client/dist"
 
+[build.environment]
+  VITE_EMAILJS_PUBLIC_KEY = "KYuyuPd1kYNIrsAUk"
+  VITE_EMAILJS_SERVICE_ID = "service_ddd3od9"
+  VITE_EMAILJS_TEMPLATE_ID = "template_portfolio"
+  VITE_CACHE_KEY = "github_projects_cache"
+
 [dev]
   command = "npm run dev"
 
