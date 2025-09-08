@@ -1,6 +1,12 @@
 import { Portfolio, Project } from './types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+// In production, ensure we always use the Render API
+const isProd = import.meta.env.MODE === 'production';
+const API_URL = isProd
+    ? 'https://amrganainy-portfolio-api.onrender.com/api'
+    : (import.meta.env.VITE_API_URL || 'http://localhost:3000/api');
+
+console.log('Using API URL:', API_URL);
 
 // Store token in localStorage
 const setToken = (token: string) => {
