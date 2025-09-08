@@ -1,10 +1,9 @@
 import { Portfolio, Project } from './types';
+import { CLOUD_API_URL, LOCAL_API_URL } from './constants';
 
-// In production, ensure we always use the Render API
+// In production, ensure we always use the cloud API
 const isProd = import.meta.env.MODE === 'production';
-const API_URL = isProd
-    ? 'https://amrganainy-portfolio-api.onrender.com/api'
-    : (import.meta.env.VITE_API_URL || 'http://localhost:3000/api');
+const API_URL = isProd ? CLOUD_API_URL : LOCAL_API_URL;
 
 console.log('Using API URL:', API_URL);
 

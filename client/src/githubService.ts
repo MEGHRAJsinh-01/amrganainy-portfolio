@@ -1,5 +1,5 @@
 import { GitHubRepo, CachedData, Project, LinkedInProfileData, LinkedInAdditionalProfileData, LinkedInCacheData, LinkedInAdditionalCacheData } from './types';
-import { GITHUB_USERNAME, CACHE_KEY, CACHE_DURATION, VISIBILITY_KEY, personalInfo } from './constants';
+import { GITHUB_USERNAME, CACHE_KEY, CACHE_DURATION, VISIBILITY_KEY, personalInfo, CLOUD_API_URL, LOCAL_API_URL } from './constants';
 import { translateText } from './translationService';
 
 export const SKILLS_CACHE_KEY = 'github_skills_cache';
@@ -15,8 +15,14 @@ export const fetchGitHubRepos = async (): Promise<GitHubRepo[]> => {
         // Get GitHub username from database first, if available
         let username = '';
         try {
+            // Always use the Render API URL in production to avoid localhost issues
+            const isProd = import.meta.env.MODE === 'production';
+            const apiBaseUrl = isProd
+                ? CLOUD_API_URL
+                : LOCAL_API_URL;
+
             // Try to get portfolio data which contains social links
-            const portfolioResponse = await fetch(`${import.meta.env.VITE_API_URL}/portfolio`);
+            const portfolioResponse = await fetch(`${apiBaseUrl}/portfolio`);
             if (portfolioResponse.ok) {
                 const portfolioData = await portfolioResponse.json();
                 // Extract GitHub username from GitHub URL if available
@@ -360,8 +366,14 @@ export const fetchLinkedInProfile = async (): Promise<LinkedInProfileData> => {
         // Get LinkedIn profile URL from portfolio data first, if available
         let linkedinUrl = '';
         try {
+            // Always use the Render API URL in production to avoid localhost issues
+            const isProd = import.meta.env.MODE === 'production';
+            const apiBaseUrl = isProd
+                ? CLOUD_API_URL
+                : LOCAL_API_URL;
+
             // Try to get portfolio data which contains social links
-            const portfolioResponse = await fetch(`${import.meta.env.VITE_API_URL}/portfolio`);
+            const portfolioResponse = await fetch(`${apiBaseUrl}/portfolio`);
             if (portfolioResponse.ok) {
                 const portfolioData = await portfolioResponse.json();
                 if (portfolioData?.socialLinks?.linkedin) {
@@ -384,7 +396,12 @@ export const fetchLinkedInProfile = async (): Promise<LinkedInProfileData> => {
         }
 
         // Use our proxy server instead of calling Apify directly
-        const proxyServerUrl = 'http://localhost:3000/api/linkedin-profile'; // Update this URL if your server runs on a different port
+        // Always use the Render API URL in production to avoid localhost issues
+        const isProd = import.meta.env.MODE === 'production';
+        const apiBaseUrl = isProd
+            ? CLOUD_API_URL
+            : LOCAL_API_URL;
+        const proxyServerUrl = `${apiBaseUrl}/linkedin-profile`;
 
         const response = await fetch(proxyServerUrl, {
             method: 'POST',

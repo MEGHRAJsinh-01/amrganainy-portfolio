@@ -119,4 +119,7 @@ export const CACHE_KEY = import.meta.env.VITE_CACHE_KEY;
 export const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 export const ADMIN_PASSWORD = import.meta.env.VITE_ADMIN_PASSWORD; // Fallback for development
 export const VISIBILITY_KEY = 'project_visibility_settings';
-export const API_URL = import.meta.env.VITE_API_URL;
+
+// API URL configuration
+export const LOCAL_API_URL = 'http://localhost:3000/api';
+export const CLOUD_API_URL = 'https://amrganainy-portfolio-api.onrender.com/api';
