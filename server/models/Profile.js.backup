@@ -1,0 +1,67 @@
+const mongoose = require('mongoose');
+
+const ProfileSchema = new mongoose.Schema({
+    user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
+    name: {
+        type: String,
+        required: true
+    },
+    title: {
+        type: String,
+        required: true
+    },
+    bio: {
+        type: String,
+        required: true
+    },
+    location: {
+        type: String,
+        default: ''
+    },
+    skills: [{
+        type: String
+    }],
+    socialLinks: {
+        github: { type: String, default: '' },
+        linkedin: { type: String, default: '' },
+        twitter: { type: String, default: '' },
+        website: { type: String, default: '' }
+    },
+    // File storage using GridFS
+    cvFile: {
+        type: String,
+        default: null // URL to access the file
+    },
+    cvFileId: {
+        type: mongoose.Schema.Types.ObjectId,
+        default: null // GridFS file ID
+    },
+    profileImage: {
+        type: String,
+        default: null // URL to access the file
+    },
+    profileImageId: {
+        type: mongoose.Schema.Types.ObjectId,
+        default: null // GridFS file ID
+    },
+    aboutMe: {
+        type: String,
+        default: ''
+    },
+    contactEmail: {
+        type: String,
+        default: ''
+    },
+    contactPhone: {
+        type: String,
+        default: ''
+    }
+}, {
+    timestamps: true
+});
+
+module.exports = mongoose.model('Profile', ProfileSchema);

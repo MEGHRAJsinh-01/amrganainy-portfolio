@@ -51,11 +51,11 @@ const config = {
     // Frontend URLs
     frontend: {
         url: process.env.FRONTEND_URL || (environment === 'development'
-            ? 'http://localhost:5174'
+            ? 'http://localhost:5173'
             : 'https://yourproductionurl.com'),
         // Development allowed origins
         corsOrigins: [
-            process.env.FRONTEND_URL || 'http://localhost:5174',
+            process.env.FRONTEND_URL || 'http://localhost:5173',
             'http://localhost:3000',
             // You can add more origins here for different environments
             ...(process.env.ADDITIONAL_CORS_ORIGINS
@@ -72,6 +72,13 @@ const config = {
             username: process.env.VITE_ADMIN_USERNAME,
             password: process.env.VITE_ADMIN_PASSWORD
         }
+    },
+
+    // JWT configuration (for backward compatibility with auth controller)
+    jwt: {
+        secret: process.env.JWT_SECRET || 'your_development_jwt_secret',
+        expiresIn: process.env.JWT_EXPIRES_IN || '1d',
+        cookieExpiresIn: parseInt(process.env.JWT_COOKIE_EXPIRES_IN, 10) || 1 // days
     },
 
     // API Services
@@ -96,15 +103,14 @@ const config = {
         }
     },
 
-    // Portfolio settings - defaulted to empty as they're stored in the database
-    // and managed through the admin panel
+    // Portfolio settings - meta defaults only; content is stored in MongoDB
+    // via the Profile model and managed through the admin panel.
     portfolio: {
         defaultProfileImage: '',  // No default, use what's in the database
-        cvViewUrl: '',           // Set through admin panel and stored in DB
-        cvDownloadUrl: '',       // Set through admin panel and stored in DB
-        contactEmail: '',        // Set through admin panel and stored in DB
-        githubUrl: '',           // Set through admin panel and stored in DB
-        linkedinUrl: ''          // Set through admin panel and stored in DB
+        cvViewUrl: '',            // Stored in DB (Profile)
+        cvDownloadUrl: '',        // Stored in DB (Profile)
+        contactEmail: ''          // Stored in DB (Profile)
+        // Note: Social links (GitHub, LinkedIn, etc.) live in Profile.socialLinks.
     }
 };
 

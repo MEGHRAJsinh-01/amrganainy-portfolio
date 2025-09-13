@@ -23,7 +23,7 @@ const Footer: React.FC<FooterProps> = ({ language, showAdminLink, onAdminClick }
                 }
 
                 // If LinkedIn data isn't available, try to get from portfolio API
-                const portfolioData = await portfolioAPI.getPortfolio();
+                const portfolioData = await portfolioAPI.getProfile();
                 if (portfolioData?.personalInfo?.name) {
                     setName(portfolioData.personalInfo.name);
                     return;
@@ -33,7 +33,12 @@ const Footer: React.FC<FooterProps> = ({ language, showAdminLink, onAdminClick }
                 setName('Portfolio Owner');
             } catch (error) {
                 console.error('Error loading name for footer:', error);
-                setName('Portfolio Owner');
+                // For 401 errors, don't show error in footer, just use placeholder
+                if (error instanceof Error && error.message.includes('Token is not valid')) {
+                    setName('Portfolio Owner');
+                } else {
+                    setName('Portfolio Owner');
+                }
             }
         };
 

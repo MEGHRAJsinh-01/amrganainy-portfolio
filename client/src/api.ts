@@ -7,6 +7,73 @@ const API_URL = isProd ? CLOUD_API_URL : LOCAL_API_URL;
 
 console.log('Using API URL:', API_URL);
 
+// Detect if we're viewing a public portfolio at /u/:username
+// Returns the username if present, otherwise null
+const getPublicUsername = (): string | null => {
+    try {
+        const path = window.location?.pathname || '';
+        // Supported patterns:
+        // - /u/:username
+        // - /u/:username/anything
+        const match = path.match(/^\/?u\/([^\/?#]+)(?:[\/?#].*)?$/i);
+        return match && match[1] ? decodeURIComponent(match[1]) : null;
+    } catch {
+        return null;
+    }
+};
+
+// Normalize various backend profile payloads into the legacy Portfolio shape
+const normalizeProfile = (raw: any): Portfolio => {
+    try {
+        // New multi-user public shape: { status, data: { profile, user } }
+        if (raw && raw.data && (raw.data.profile || raw.data.user)) {
+            const p = raw.data.profile || {};
+            const u = raw.data.user || {};
+            const fullName = [u.firstName, u.lastName].filter(Boolean).join(' ');
+            return {
+                profileImage: p.profileImageUrl || p.profileImage || '',
+                cvViewUrl: p.cvViewUrl || p.cvFileUrl || p.cvDownloadUrl,
+                cvDownloadUrl: p.cvDownloadUrl || p.cvFileUrl || p.cvViewUrl,
+                personalInfo: {
+                    name: fullName || u.username || '',
+                    title: p.title || '',
+                    email: p.contactEmail || '',
+                    phone: p.phone || '',
+                    location: p.location || '',
+                    bio: p.bio || ''
+                },
+                socialLinks: p.socialLinks || {}
+            };
+        }
+
+        // Legacy private shape examples (various): keep if already in expected format
+        if (raw && (raw.personalInfo || raw.socialLinks || raw.profileImage)) {
+            return raw as Portfolio;
+        }
+
+        // Older legacy flat profile: { name, title, bio, profileImage, cvFile, socialLinks, ... }
+        if (raw && (raw.name || raw.title || raw.bio)) {
+            return {
+                profileImage: raw.profileImage || raw.profileImageUrl,
+                cvViewUrl: raw.cvViewUrl || raw.cvFile || raw.cvDownloadUrl,
+                cvDownloadUrl: raw.cvDownloadUrl || raw.cvFile,
+                personalInfo: {
+                    name: raw.name || '',
+                    title: raw.title || '',
+                    email: raw.contactEmail || '',
+                    phone: raw.contactPhone || raw.phone || '',
+                    location: raw.location || '',
+                    bio: raw.bio || ''
+                },
+                socialLinks: raw.socialLinks || {}
+            };
+        }
+    } catch (e) {
+        console.warn('Failed to normalize profile payload, returning raw:', e);
+    }
+    return raw as Portfolio;
+};
+
 // Store token in localStorage
 const setToken = (token: string) => {
     localStorage.setItem('portfolio_auth_token', token);
@@ -15,6 +82,22 @@ const setToken = (token: string) => {
 // Get token from localStorage
 const getToken = (): string | null => {
     return localStorage.getItem('portfolio_auth_token');
+};
+
+// Check if user is authenticated
+export const isAuthenticated = (): boolean => {
+    const token = getToken();
+    if (!token) return false;
+
+    try {
+        // Basic JWT validation - check if token is not expired
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const currentTime = Date.now() / 1000;
+        return payload.exp > currentTime;
+    } catch (error) {
+        console.error('Error validating token:', error);
+        return false;
+    }
 };
 
 // Remove token from localStorage
@@ -33,12 +116,12 @@ const authHeaders = () => {
 
 // Authentication API
 export const authAPI = {
-    login: async (username: string, password: string) => {
+    login: async (email: string, password: string) => {
         try {
             const response = await fetch(`${API_URL}/auth/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username, password }),
+                body: JSON.stringify({ email, password }),
             });
 
             const data = await response.json();
@@ -55,6 +138,28 @@ export const authAPI = {
         }
     },
 
+    register: async (userData: { username: string; email: string; password: string; linkedinUrl: string; githubUrl: string }) => {
+        try {
+            const response = await fetch(`${API_URL}/auth/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(userData),
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.message || 'Registration failed');
+            }
+
+            setToken(data.token);
+            return data.user;
+        } catch (error) {
+            console.error('Registration error:', error);
+            throw error;
+        }
+    },
+
     logout: () => {
         removeToken();
     },
@@ -64,48 +169,81 @@ export const authAPI = {
     }
 };
 
-// Portfolio API
+// Portfolio API (aligned with multi-user backend routes)
 export const portfolioAPI = {
-    getPortfolio: async (): Promise<Portfolio> => {
+    getProfile: async () => {
         try {
-            const response = await fetch(`${API_URL}/portfolio`);
+            const publicUsername = getPublicUsername();
+            const url = publicUsername
+                ? `${API_URL.replace(/\/api$/, '/api')}/profiles/username/${encodeURIComponent(publicUsername)}`
+                : `${API_URL}/profile/me`;
 
-            if (!response.ok) {
-                throw new Error('Failed to fetch portfolio data');
-            }
-
-            return await response.json();
-        } catch (error) {
-            console.error('Error fetching portfolio data:', error);
-            throw error;
-        }
-    },
-
-    updatePortfolio: async (portfolioData: Partial<Portfolio>): Promise<Portfolio> => {
-        try {
-            const response = await fetch(`${API_URL}/portfolio`, {
-                method: 'PUT',
-                headers: authHeaders(),
-                body: JSON.stringify(portfolioData),
+            const response = await fetch(url, {
+                headers: publicUsername ? { 'Content-Type': 'application/json' } : authHeaders(),
             });
 
             if (!response.ok) {
-                throw new Error('Failed to update portfolio data');
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to fetch profile data');
             }
 
-            return await response.json();
+            const json = await response.json();
+            return normalizeProfile(json);
         } catch (error) {
-            console.error('Error updating portfolio data:', error);
+            console.error('Error fetching profile data:', error);
             throw error;
         }
     },
 
-    uploadProfileImage: async (imageFile: File): Promise<{ imageUrl: string }> => {
+    createProfile: async (profileData: any) => {
+        try {
+            const response = await fetch(`${API_URL}/profile/me`, {
+                method: 'PATCH',
+                headers: authHeaders(),
+                body: JSON.stringify(profileData),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to create profile');
+            }
+
+            const json = await response.json();
+            return normalizeProfile(json);
+        } catch (error) {
+            console.error('Error creating profile:', error);
+            throw error;
+        }
+    },
+
+    updateProfile: async (profileData: any) => {
+        try {
+            const response = await fetch(`${API_URL}/profile/me`, {
+                method: 'PATCH',
+                headers: authHeaders(),
+                body: JSON.stringify(profileData),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to update profile');
+            }
+
+            const json = await response.json();
+            return normalizeProfile(json);
+        } catch (error) {
+            console.error('Error updating profile:', error);
+            throw error;
+        }
+    },
+
+    uploadProfileImage: async (imageFile: File) => {
         try {
             const formData = new FormData();
+            // Server expects field name 'image' at /profile/me/profile-image
             formData.append('image', imageFile);
 
-            const response = await fetch(`${API_URL}/portfolio/profile-image`, {
+            const response = await fetch(`${API_URL}/profile/me/profile-image`, {
                 method: 'POST',
                 headers: {
                     'Authorization': authHeaders().Authorization,
@@ -114,28 +252,69 @@ export const portfolioAPI = {
             });
 
             if (!response.ok) {
-                throw new Error('Failed to upload profile image');
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to upload profile image');
             }
 
-            return await response.json();
+            const json = await response.json();
+            // Return a simple shape for consumers
+            const data = json?.data || {};
+            return { profileImageUrl: data.profileImageUrl };
         } catch (error) {
             console.error('Error uploading profile image:', error);
             throw error;
         }
     },
 
-    deleteProfileImage: async (): Promise<void> => {
+    uploadCV: async (cvFile: File) => {
         try {
-            const response = await fetch(`${API_URL}/portfolio/profile-image`, {
-                method: 'DELETE',
-                headers: authHeaders(),
+            const formData = new FormData();
+            // Server expects field name 'cv' at /profile/me/cv
+            formData.append('cv', cvFile);
+
+            const response = await fetch(`${API_URL}/profile/me/cv`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': authHeaders().Authorization,
+                },
+                body: formData,
             });
 
             if (!response.ok) {
-                throw new Error('Failed to delete profile image');
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to upload CV');
             }
 
-            return await response.json();
+            const json = await response.json();
+            const data = json?.data || {};
+            // Return normalized Portfolio-like snippet
+            return {
+                cvFileUrl: data.cvFileUrl,
+                cvViewUrl: data.cvViewUrl,
+                cvDownloadUrl: data.cvDownloadUrl
+            };
+        } catch (error) {
+            console.error('Error uploading CV:', error);
+            throw error;
+        }
+    },
+
+    deleteProfileImage: async () => {
+        try {
+            // No dedicated delete endpoint on server; clear via PATCH
+            const response = await fetch(`${API_URL}/profile/me`, {
+                method: 'PATCH',
+                headers: authHeaders(),
+                body: JSON.stringify({ profileImageUrl: '' })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to remove profile image');
+            }
+
+            const json = await response.json();
+            return normalizeProfile(json);
         } catch (error) {
             console.error('Error deleting profile image:', error);
             throw error;
@@ -147,10 +326,13 @@ export const portfolioAPI = {
 export const projectsAPI = {
     getProjects: async (): Promise<Project[]> => {
         try {
-            const response = await fetch(`${API_URL}/projects`);
+            const response = await fetch(`${API_URL}/projects`, {
+                headers: authHeaders(),
+            });
 
             if (!response.ok) {
-                throw new Error('Failed to fetch projects');
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to fetch projects');
             }
 
             return await response.json();
@@ -162,10 +344,13 @@ export const projectsAPI = {
 
     getProject: async (id: string): Promise<Project> => {
         try {
-            const response = await fetch(`${API_URL}/projects/${id}`);
+            const response = await fetch(`${API_URL}/projects/${id}`, {
+                headers: authHeaders(),
+            });
 
             if (!response.ok) {
-                throw new Error('Failed to fetch project');
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to fetch project');
             }
 
             return await response.json();
@@ -184,7 +369,8 @@ export const projectsAPI = {
             });
 
             if (!response.ok) {
-                throw new Error('Failed to create project');
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to create project');
             }
 
             return await response.json();
@@ -203,7 +389,8 @@ export const projectsAPI = {
             });
 
             if (!response.ok) {
-                throw new Error('Failed to update project');
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to update project');
             }
 
             return await response.json();
@@ -221,7 +408,8 @@ export const projectsAPI = {
             });
 
             if (!response.ok) {
-                throw new Error('Failed to delete project');
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to delete project');
             }
         } catch (error) {
             console.error('Error deleting project:', error);
@@ -229,12 +417,12 @@ export const projectsAPI = {
         }
     },
 
-    uploadProjectImage: async (imageFile: File): Promise<{ imageUrl: string }> => {
+    uploadProjectImage: async (projectId: string, imageFile: File) => {
         try {
             const formData = new FormData();
             formData.append('image', imageFile);
 
-            const response = await fetch(`${API_URL}/projects/upload-image`, {
+            const response = await fetch(`${API_URL}/projects/${projectId}/upload-image`, {
                 method: 'POST',
                 headers: {
                     'Authorization': authHeaders().Authorization,
@@ -243,7 +431,8 @@ export const projectsAPI = {
             });
 
             if (!response.ok) {
-                throw new Error('Failed to upload project image');
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to upload project image');
             }
 
             return await response.json();

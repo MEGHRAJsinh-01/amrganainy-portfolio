@@ -12,16 +12,18 @@ const CVSection: React.FC<CVSectionProps> = ({ language }) => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [downloadClicked, setDownloadClicked] = useState(false);
+    const [authError, setAuthError] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchPortfolioData = async () => {
             try {
                 setLoading(true);
-                const data = await portfolioAPI.getPortfolio();
+                const data = await portfolioAPI.getProfile();
                 setPortfolioData(data);
                 setError(null);
             } catch (err) {
                 console.error('Error fetching portfolio data:', err);
+                // Public pages should not require authentication; just show neutral message
                 setError('Failed to load CV data from API.');
             } finally {
                 setLoading(false);
@@ -62,11 +64,13 @@ const CVSection: React.FC<CVSectionProps> = ({ language }) => {
                             {translations[language].about.cv}
                         </h2>
                         <p className="max-w-2xl mx-auto text-lg text-gray-400">
-                            {language === 'de'
-                                ? 'Leider ist mein Lebenslauf derzeit nicht verfügbar.'
-                                : 'My CV is currently not available.'}
+                            {(
+                                language === 'de'
+                                    ? 'Leider ist mein Lebenslauf derzeit nicht verfügbar.'
+                                    : 'My CV is currently not available.'
+                            )}
                         </p>
-                        {error && (
+                        {error && !authError && (
                             <div className="text-amber-400 mt-2 text-sm">
                                 <span className="material-symbols-outlined mr-1 text-sm align-middle">info</span>
                                 {error}
@@ -90,7 +94,8 @@ const CVSection: React.FC<CVSectionProps> = ({ language }) => {
                             ? 'Hier können Sie meinen Lebenslauf einsehen oder herunterladen.'
                             : 'View or download my CV to learn more about my education and experience.'}
                     </p>
-                    {error && (
+                    {/* No auth prompts on public page */}
+                    {error && !authError && (
                         <div className="text-amber-400 mt-2 text-sm">
                             <span className="material-symbols-outlined mr-1 text-sm align-middle">info</span>
                             {error}

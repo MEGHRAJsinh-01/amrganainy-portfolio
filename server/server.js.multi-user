@@ -1,0 +1,243 @@
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const http = require('http');
+const mongoose = require('mongoose');
+const cookieParser = require('cookie-parser');
+
+// Load configuration from the centralized config module
+const config = require('./config');
+
+// Import routes
+const authRoutes = require('./routes/auth.routes');
+const profileRoutes = require('./routes/profile.routes');
+const projectRoutes = require('./routes/project.routes');
+const adminRoutes = require('./routes/admin.routes');
+
+console.log(`Starting server in ${config.server.nodeEnv} mode`);
+
+const app = express();
+const PORT = config.server.port;
+
+// MongoDB Connection
+mongoose.connect(config.database.mongoUri, config.database.options)
+    .then(() => console.log('MongoDB connected'))
+    .catch(err => console.error('MongoDB connection error:', err));
+
+// Middleware
+app.use(cors({
+    origin: config.frontend.corsOrigins,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    credentials: true
+}));
+
+app.use(express.json());
+app.use(cookieParser());
+
+// Static files
+app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Simple health check endpoint
+app.get('/api/health', (req, res) => {
+    res.json({
+        status: 'OK',
+        message: 'Server is running',
+        env: config.server.nodeEnv,
+        timestamp: new Date().toISOString()
+    });
+});
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/profiles', profileRoutes);
+app.use('/api/projects', projectRoutes);
+app.use('/api/admin', adminRoutes);
+
+// Keep the LinkedIn API proxy for backward compatibility
+app.post('/api/linkedin-profile', async (req, res) => {
+    try {
+        console.log('LinkedIn profile API endpoint called');
+        const { profileUrl } = req.body;
+
+        if (!profileUrl) {
+            console.error('No profile URL provided');
+            return res.status(400).json({
+                error: 'Profile URL is required',
+                details: 'Please set your LinkedIn URL in the admin panel Social Links section'
+            });
+        }
+
+        console.log('Fetching LinkedIn profile using username from URL:', profileUrl);
+
+        // Extract username from LinkedIn URL if it's a full URL
+        // URLs can be like: linkedin.com/in/username or linkedin.com/profile/view?id=...
+        let username = 'amr-elganainy'; // Default fallback
+
+        if (profileUrl.includes('/in/')) {
+            const match = profileUrl.match(/\/in\/([^\/\?]+)/);
+            if (match && match[1]) {
+                username = match[1];
+            }
+        }
+
+        console.log('Extracted LinkedIn username:', username);
+        const apiToken = config.services.apify.token; 
+        if (!apiToken || apiToken === 'your_apify_token_here') {
+            console.error('API token missing or invalid');
+            return res.status(500).json({
+                error: 'Apify API token is missing or invalid in server environment'
+            });
+        }
+
+        // Using the LinkedIn Profile Detail actor by apimaestro with run-sync-get-dataset-items endpoint
+        // This endpoint directly returns the dataset items without needing to poll
+        const apiUrl = `https://api.apify.com/v2/acts/apimaestro~linkedin-profile-detail/run-sync-get-dataset-items?token=${apiToken}`;
+
+        console.log('Calling Apify API at:', apiUrl);
+
+        // Step 1: Start the actor run
+        const startRunResponse = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                "includeEmail": true,
+                "username": "amr-elganainy"
+            })
+        });
+
+        if (!startRunResponse.ok) {
+            const errorText = await startRunResponse.text();
+            console.error('Apify actor start error:', errorText);
+            return res.status(startRunResponse.status).json({
+                error: `Apify actor start failed: ${startRunResponse.status} ${startRunResponse.statusText}`,
+                details: errorText
+            });
+        }
+
+        // Parse the response
+        const runData = await startRunResponse.json();
+        console.log('Apify response:', JSON.stringify(runData).substring(0, 200));
+
+        // For run-sync-get-dataset-items endpoint, we get the data directly
+        if (Array.isArray(runData)) {
+            console.log('Direct data received, items count:', runData.length);
+            if (!runData || runData.length === 0) {
+                console.error('No LinkedIn profile data returned');
+                return res.status(404).json({ error: 'No LinkedIn profile data returned from Apify' });
+            }
+
+            // Return the first profile (as we're only scraping one)
+            console.log('Sending profile data to client');
+            return res.json(runData[0]);
+        }
+
+        // Step 2: If we didn't get direct data in the previous step, then we need to poll for run completion
+        // This happens when using the 'run-sync' endpoint instead of 'run-sync-get-dataset-items'
+        const runId = runData.data && runData.data.id;
+
+        if (!runId) {
+            console.error('No run ID found in response');
+            return res.status(500).json({
+                error: 'Invalid response from Apify API, no run ID found',
+                details: JSON.stringify(runData).substring(0, 500)
+            });
+        }
+
+        console.log('Apify actor run started with ID:', runId);
+        const maxWaitTime = 60000; // 1 minute timeout
+        const startTime = Date.now();
+        let isFinished = false;
+        let runStatus;
+
+        console.log('Polling for run completion...');
+        while (!isFinished && (Date.now() - startTime < maxWaitTime)) {
+            // Wait 2 seconds between status checks
+            await new Promise(resolve => setTimeout(resolve, 2000));
+
+            // Check run status
+            const statusResponse = await fetch(
+                `https://api.apify.com/v2/actor-runs/${runId}?token=${apiToken}`
+            );
+
+            if (!statusResponse.ok) {
+                console.warn(`Error checking run status: ${statusResponse.status}`);
+                continue;
+            }
+
+            runStatus = await statusResponse.json();
+            console.log('Run status:', runStatus.data.status);
+
+            if (['SUCCEEDED', 'FAILED', 'TIMED-OUT', 'ABORTED'].includes(runStatus.data.status)) {
+                isFinished = true;
+                console.log('Apify actor run finished with status:', runStatus.data.status);
+            } else {
+                console.log('Apify actor run still in progress:', runStatus.data.status);
+            }
+        }
+
+        // Check if the run finished successfully
+        if (!isFinished) {
+            console.error('Apify actor run timed out');
+            return res.status(504).json({ error: 'Apify actor run timed out' });
+        }
+
+        if (runStatus.data.status !== 'SUCCEEDED') {
+            console.error('Apify actor run failed with status:', runStatus.data.status);
+            return res.status(500).json({
+                error: `Apify actor run failed with status: ${runStatus.data.status}`
+            });
+        }
+
+        // Step 3: Get the results
+        console.log('Fetching dataset results...');
+        const resultsResponse = await fetch(
+            `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${apiToken}`
+        );
+
+        if (!resultsResponse.ok) {
+            console.error('Failed to fetch results:', resultsResponse.status, resultsResponse.statusText);
+            return res.status(resultsResponse.status).json({
+                error: `Failed to fetch results: ${resultsResponse.status} ${resultsResponse.statusText}`
+            });
+        }
+
+        const results = await resultsResponse.json();
+        console.log('Results received, items count:', results.length);
+
+        if (!results || results.length === 0) {
+            console.error('No LinkedIn profile data returned');
+            return res.status(404).json({ error: 'No LinkedIn profile data returned from Apify' });
+        }
+
+        // Return the first profile (as we're only scraping one)
+        console.log('Sending profile data to client');
+        res.json(results[0]);
+    } catch (error) {
+        console.error('Server error:', error);
+        res.status(500).json({
+            error: 'Server error processing LinkedIn profile request',
+            message: error.message
+        });
+    }
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error('Server error:', err);
+    res.status(err.status || 500).json({
+        status: 'error',
+        message: err.message || 'Internal server error'
+    });
+});
+
+// Start the server
+const server = http.createServer(app);
+
+server.listen(config.server.port, config.server.host, () => {
+    console.log(`Portfolio API server running on http://${config.server.host === '0.0.0.0' ? 'localhost' : config.server.host}:${config.server.port}`);
+    console.log(`Access the health check at http://${config.server.host === '0.0.0.0' ? 'localhost' : config.server.host}:${config.server.port}/api/health`);
+    console.log(`Server running in ${config.server.nodeEnv} mode`);
+    console.log(`Multi-user platform enabled with ${mongoose.connection.name} database`);
+});

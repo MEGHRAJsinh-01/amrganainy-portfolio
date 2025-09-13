@@ -17,6 +17,8 @@ import { portfolioAPI } from '../api';
 
 interface AboutProps {
     language: string;
+    isEditMode?: boolean;
+    onProfileUpdate?: (data: any) => void;
 }
 
 // Interface for language proficiency data
@@ -63,15 +65,12 @@ const ensureFullImageUrl = (url: string | undefined): string => {
     return `${origin}/${url.replace(/^\/+/, '')}`;
 };
 
-const About: React.FC<AboutProps> = ({ language }) => {
+const About: React.FC<AboutProps> = ({ language, isEditMode = false, onProfileUpdate }) => {
     const [skills, setSkills] = useState<SkillsData>({
         programmingLanguages: [],
         otherSkills: []
     });
-    const [bio, setBio] = useState<{ en: string; de: string }>({
-        en: "Junior Android and cross-platform mobile developer with solid project experience. I love turning ideas into functional apps, am a team player, and always ready to learn. As a CS graduate and Cyber Security master's student, I'm currently writing my master's thesis.",
-        de: "Junior Android- und cross-platform Mobile-Entwickler mit fundierter Projekterfahrung. Ich liebe es, Ideen in funktionierende Apps umzusetzen, bin Teamplayer und immer bereit, mehr zu lernen. Als CS-Absolvent und Master-Student in Cyber Security schreibe ich derzeit meine Masterarbeit."
-    });
+    const [bio, setBio] = useState<{ en: string; de: string }>({ en: '', de: '' });
     const [linkedInProfile, setLinkedInProfile] = useState<LinkedInProfileData | null>(null);
     const [educationData, setEducationData] = useState<LinkedInEducation[]>([]);
     const [experienceData, setExperienceData] = useState<LinkedInExperience[]>([]);
@@ -81,6 +80,14 @@ const About: React.FC<AboutProps> = ({ language }) => {
     const [isLoadingPortfolio, setIsLoadingPortfolio] = useState<boolean>(false);
     const [bioError, setBioError] = useState<string | null>(null);
     const [portfolioError, setPortfolioError] = useState<string | null>(null);
+    const [skillsError, setSkillsError] = useState<string | null>(null);
+
+    // Edit mode state variables
+    const [editName, setEditName] = useState<string>('');
+    const [editTitle, setEditTitle] = useState<string>('');
+    const [editBioEn, setEditBioEn] = useState<string>('');
+    const [editBioDe, setEditBioDe] = useState<string>('');
+    const [isSaving, setIsSaving] = useState<boolean>(false);
 
     useEffect(() => {
         const loadData = async () => {
@@ -89,6 +96,7 @@ const About: React.FC<AboutProps> = ({ language }) => {
                 // Load skills
                 const dynamicSkills = await getDynamicSkills();
                 setSkills(dynamicSkills);
+                setSkillsError(null);
 
                 // Load profile data from LinkedIn
                 try {
@@ -216,14 +224,14 @@ const About: React.FC<AboutProps> = ({ language }) => {
                         if (bioError.message.includes('API token')) {
                             setBioError('LinkedIn API token is missing or invalid. Please check your Apify configuration.');
                         } else if (bioError.message.includes('scraping failed')) {
-                            setBioError('LinkedIn profile scraping failed. This could be due to LinkedIn rate limits or changes. Using fallback bio instead.');
+                            setBioError('LinkedIn profile scraping failed. This could be due to LinkedIn rate limits or changes.');
                         } else if (bioError.message.includes('timed out')) {
-                            setBioError('LinkedIn profile scraping timed out. The operation took too long to complete. Using fallback bio instead.');
+                            setBioError('LinkedIn profile scraping timed out. The operation took too long to complete.');
                         } else {
                             setBioError(bioError.message);
                         }
                     } else {
-                        setBioError('Failed to load bio from LinkedIn. Using fallback bio instead.');
+                        setBioError('Failed to load bio from LinkedIn.');
                     }
                     // Keep the existing bio (don't update it with fallback)
 
@@ -232,6 +240,12 @@ const About: React.FC<AboutProps> = ({ language }) => {
                 }
             } catch (error) {
                 console.error('Error loading dynamic data:', error);
+                // Set skills error if GitHub fails
+                if (error instanceof Error && error.message.includes('GitHub username not configured')) {
+                    setSkillsError('GitHub username is not configured. Please set it in the admin panel Social Links section.');
+                } else {
+                    setSkillsError('Failed to load skills from GitHub. Please check your GitHub configuration.');
+                }
                 // We don't fallback for bio (that shows error), but we still use empty arrays for skills
 
                 // Try to load portfolio data even if other data loading fails
@@ -246,10 +260,20 @@ const About: React.FC<AboutProps> = ({ language }) => {
         };
 
         loadData();
-    }, []); const loadPortfolioData = async () => {
+    }, []);
+
+    // Initialize edit state when data loads or edit mode changes
+    useEffect(() => {
+        if (isEditMode && (linkedInProfile || portfolioData)) {
+            setEditName(linkedInProfile?.name || portfolioData?.personalInfo?.name || '');
+            setEditTitle(linkedInProfile?.headline || portfolioData?.personalInfo?.title || '');
+            setEditBioEn(bio.en || '');
+            setEditBioDe(bio.de || '');
+        }
+    }, [isEditMode, linkedInProfile, portfolioData, bio]); const loadPortfolioData = async () => {
         setIsLoadingPortfolio(true);
         try {
-            const portfolio = await portfolioAPI.getPortfolio();
+            const portfolio = await portfolioAPI.getProfile();
             setPortfolioData(portfolio);
 
             // If LinkedIn profile is loaded and there's no custom profile image, 
@@ -269,8 +293,49 @@ const About: React.FC<AboutProps> = ({ language }) => {
             setIsLoadingPortfolio(false);
         } catch (error) {
             console.error('Error loading portfolio data:', error);
-            setPortfolioError('Failed to load portfolio data from server. Using fallback data.');
+            setPortfolioError('Failed to load portfolio data from server.');
             setIsLoadingPortfolio(false);
+        }
+    };
+
+    const handleSaveProfile = async () => {
+        if (!onProfileUpdate) return;
+
+        setIsSaving(true);
+        try {
+            const updatedProfile = {
+                personalInfo: {
+                    name: editName,
+                    title: editTitle
+                },
+                bio: {
+                    en: editBioEn,
+                    de: editBioDe
+                }
+            };
+
+            await onProfileUpdate(updatedProfile);
+
+            // Update local state
+            setBio({ en: editBioEn, de: editBioDe });
+            if (portfolioData) {
+                setPortfolioData({
+                    ...portfolioData,
+                    personalInfo: {
+                        ...portfolioData.personalInfo,
+                        name: editName,
+                        title: editTitle
+                    }
+                });
+            }
+
+            // Exit edit mode
+            // Note: The parent component should handle this
+        } catch (error) {
+            console.error('Error saving profile:', error);
+            alert('Failed to save profile changes. Please try again.');
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -315,31 +380,109 @@ const About: React.FC<AboutProps> = ({ language }) => {
                     ) : null}
                     <div className="flex flex-col gap-6 text-center lg:text-left">
                         <div>
-                            <h1 className="text-white text-5xl lg:text-6xl font-bold leading-tight tracking-tighter mb-4 bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                                {linkedInProfile?.name || portfolioData?.personalInfo?.name || (isLoading ? (
-                                    <span className="flex items-center gap-2">
-                                        <svg className="animate-spin h-5 w-5 text-blue-400 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                        Loading...
-                                    </span>
-                                ) : 'Name not available')}
-                            </h1>
-                            <h2 className="text-blue-400 text-xl lg:text-2xl font-medium leading-normal mb-6">
-                                {linkedInProfile?.headline || portfolioData?.personalInfo?.title || (isLoading ? (
-                                    <span className="flex items-center gap-2">
-                                        <svg className="animate-spin h-4 w-4 text-blue-400 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                        Loading...
-                                    </span>
-                                ) : 'Title not available')}
-                            </h2>
+                            {isEditMode ? (
+                                <div className="space-y-4">
+                                    <input
+                                        type="text"
+                                        value={editName}
+                                        onChange={(e) => setEditName(e.target.value)}
+                                        className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-white text-4xl lg:text-5xl font-bold leading-tight tracking-tighter focus:border-blue-500 focus:outline-none"
+                                        placeholder="Enter your name"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={editTitle}
+                                        onChange={(e) => setEditTitle(e.target.value)}
+                                        className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-blue-400 text-xl lg:text-2xl font-medium leading-normal focus:border-blue-500 focus:outline-none"
+                                        placeholder="Enter your title/profession"
+                                    />
+                                </div>
+                            ) : (
+                                <>
+                                    <h1 className="text-white text-5xl lg:text-6xl font-bold leading-tight tracking-tighter mb-4 bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                                        {linkedInProfile?.name || portfolioData?.personalInfo?.name || (isLoading ? (
+                                            <span className="flex items-center gap-2">
+                                                <svg className="animate-spin h-5 w-5 text-blue-400 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                Loading...
+                                            </span>
+                                        ) : 'Name not available')}
+                                    </h1>
+                                    <h2 className="text-blue-400 text-xl lg:text-2xl font-medium leading-normal mb-6">
+                                        {linkedInProfile?.headline || portfolioData?.personalInfo?.title || (isLoading ? (
+                                            <span className="flex items-center gap-2">
+                                                <svg className="animate-spin h-4 w-4 text-blue-400 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                                Loading...
+                                            </span>
+                                        ) : 'Title not available')}
+                                    </h2>
+                                </>
+                            )}
                         </div>
                         <div className="text-gray-300 text-lg font-normal leading-relaxed max-w-2xl">
-                            {isLoading ? (
+                            {isEditMode ? (
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-400 mb-2">Bio (English)</label>
+                                        <textarea
+                                            value={editBioEn}
+                                            onChange={(e) => setEditBioEn(e.target.value)}
+                                            className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-gray-300 text-lg font-normal leading-relaxed focus:border-blue-500 focus:outline-none resize-vertical min-h-[120px]"
+                                            placeholder="Enter your bio in English"
+                                            rows={4}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-400 mb-2">Bio (German)</label>
+                                        <textarea
+                                            value={editBioDe}
+                                            onChange={(e) => setEditBioDe(e.target.value)}
+                                            className="w-full bg-gray-800 border border-gray-600 rounded-lg px-4 py-3 text-gray-300 text-lg font-normal leading-relaxed focus:border-blue-500 focus:outline-none resize-vertical min-h-[120px]"
+                                            placeholder="Enter your bio in German"
+                                            rows={4}
+                                        />
+                                    </div>
+                                    <div className="flex gap-3 pt-4">
+                                        <button
+                                            onClick={handleSaveProfile}
+                                            disabled={isSaving}
+                                            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center gap-2"
+                                        >
+                                            {isSaving ? (
+                                                <>
+                                                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                    Saving...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span className="material-symbols-outlined text-sm">save</span>
+                                                    Save Changes
+                                                </>
+                                            )}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                // Reset to original values
+                                                setEditName(linkedInProfile?.name || portfolioData?.personalInfo?.name || '');
+                                                setEditTitle(linkedInProfile?.headline || portfolioData?.personalInfo?.title || '');
+                                                setEditBioEn(bio.en || '');
+                                                setEditBioDe(bio.de || '');
+                                            }}
+                                            className="px-6 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors"
+                                        >
+                                            Reset
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : isLoading ? (
                                 <span className="flex items-center gap-2">
                                     <svg className="animate-spin h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -353,18 +496,25 @@ const About: React.FC<AboutProps> = ({ language }) => {
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                             <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                                         </svg>
-                                        <span className="font-bold">Error Loading Bio</span>
+                                        <span className="font-bold">Error loading LinkedIn profile info</span>
                                     </div>
-                                    <p>{bioError}</p>
-                                    <button
-                                        onClick={() => {
-                                            clearLinkedInCache();
-                                            window.location.reload();
-                                        }}
-                                        className="mt-3 text-sm bg-red-700 hover:bg-red-600 text-white py-1 px-3 rounded transition-colors"
-                                    >
-                                        Clear Cache & Reload
-                                    </button>
+                                    <p className="text-gray-300">We couldn’t load the LinkedIn details right now.</p>
+                                </div>
+                            ) : portfolioError ? (
+                                <div className="text-amber-400 bg-amber-900/20 border border-amber-700/50 rounded-lg p-4">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                        </svg>
+                                        <span className="font-bold">Some data couldn’t be loaded</span>
+                                    </div>
+                                    <p>{portfolioError}</p>
+                                    {/* Hide admin link on public view */}
+                                    {/^\/?u\//i.test(window.location.pathname) ? null : (
+                                        <a href="/admin" className="mt-3 inline-block text-sm bg-blue-600 hover:bg-blue-700 text-white py-1 px-3 rounded transition-colors">
+                                            Go to Admin Panel
+                                        </a>
+                                    )}
                                 </div>
                             ) : bio && (bio[language] || bio['en']) ? (
                                 <div className="markdown-bio">
@@ -516,15 +666,42 @@ const About: React.FC<AboutProps> = ({ language }) => {
                         </div>
                         <h3 className="text-white text-2xl font-bold">{translations[language].about.programmingLanguages}</h3>
                     </div>
-                    <div className="flex gap-3 flex-wrap">
-                        {skills && skills.programmingLanguages && skills.programmingLanguages.map(lang => (
-                            <div key={lang} className="flex items-center justify-center gap-x-2 rounded-full bg-gradient-to-r from-blue-900/50 to-blue-800/30 px-4 py-2 border border-blue-800/50 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-300">
-                                <p className="text-gray-300 text-sm font-medium leading-normal">
-                                    {lang}
-                                </p>
+                    {skillsError ? (
+                        <div className="text-amber-400 bg-amber-900/20 border border-amber-700/50 rounded-lg p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                                <span className="font-bold">GitHub Integration Issue</span>
                             </div>
-                        ))}
-                    </div>
+                            <p className="mb-3">{skillsError}</p>
+                            <div className="flex gap-2">
+                                <a href="/admin" className="inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm">
+                                    Go to Admin Panel
+                                </a>
+                                <button
+                                    onClick={() => window.location.reload()}
+                                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors text-sm"
+                                >
+                                    Retry
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex gap-3 flex-wrap">
+                            {skills && skills.programmingLanguages && skills.programmingLanguages.length > 0 ? (
+                                skills.programmingLanguages.map(lang => (
+                                    <div key={lang} className="flex items-center justify-center gap-x-2 rounded-full bg-gradient-to-r from-blue-900/50 to-blue-800/30 px-4 py-2 border border-blue-800/50 hover:border-blue-500/50 hover:shadow-lg hover:shadow-blue-500/20 transition-all duration-300">
+                                        <p className="text-gray-300 text-sm font-medium leading-normal">
+                                            {lang}
+                                        </p>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-gray-500 text-sm">No programming languages detected from GitHub repositories.</p>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Other Skills Section */}
@@ -535,15 +712,42 @@ const About: React.FC<AboutProps> = ({ language }) => {
                         </div>
                         <h3 className="text-white text-2xl font-bold">{translations[language].about.skills}</h3>
                     </div>
-                    <div className="flex gap-3 flex-wrap">
-                        {skills && skills.otherSkills && skills.otherSkills.map(skill => (
-                            <div key={skill} className="flex items-center justify-center gap-x-2 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 px-4 py-2 border border-gray-600 hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/20 transition-all duration-300">
-                                <p className="text-gray-300 text-sm font-medium leading-normal">
-                                    {skill}
-                                </p>
+                    {skillsError ? (
+                        <div className="text-amber-400 bg-amber-900/20 border border-amber-700/50 rounded-lg p-4">
+                            <div className="flex items-center gap-2 mb-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                                <span className="font-bold">Skills Loading Issue</span>
                             </div>
-                        ))}
-                    </div>
+                            <p className="mb-3">{skillsError}</p>
+                            <div className="flex gap-2">
+                                <a href="/admin" className="inline-block px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm">
+                                    Configure GitHub
+                                </a>
+                                <button
+                                    onClick={() => window.location.reload()}
+                                    className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors text-sm"
+                                >
+                                    Retry
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="flex gap-3 flex-wrap">
+                            {skills && skills.otherSkills && skills.otherSkills.length > 0 ? (
+                                skills.otherSkills.map(skill => (
+                                    <div key={skill} className="flex items-center justify-center gap-x-2 rounded-full bg-gradient-to-r from-gray-700 to-gray-800 px-4 py-2 border border-gray-600 hover:border-purple-500/50 hover:shadow-lg hover:shadow-purple-500/20 transition-all duration-300">
+                                        <p className="text-gray-300 text-sm font-medium leading-normal">
+                                            {skill}
+                                        </p>
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-gray-500 text-sm">No additional skills detected from GitHub repositories.</p>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
         </section>

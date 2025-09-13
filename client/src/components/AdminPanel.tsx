@@ -43,18 +43,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
     const loadPortfolioData = async () => {
         setIsLoadingPortfolio(true);
         try {
-            const portfolio = await portfolioAPI.getPortfolio();
+            const portfolio = await portfolioAPI.getProfile();
             setPortfolioData(portfolio);
 
             // Set form fields from portfolio data
             if (portfolio.cvViewUrl) setCvViewUrl(portfolio.cvViewUrl);
             if (portfolio.cvDownloadUrl) setCvDownloadUrl(portfolio.cvDownloadUrl);
-            if (portfolio.profileImage) {
-                setProfileImageUrl(portfolio.profileImage);
+            if (portfolio.profileImage || (portfolio as any).profileImageUrl) {
+                const img = (portfolio as any).profileImageUrl || portfolio.profileImage;
+                setProfileImageUrl(img);
 
                 // Check if profile image is from LinkedIn
-                if (portfolio.profileImage.includes('licdn.com') ||
-                    portfolio.profileImage.includes('linkedin.com')) {
+                if (img && (img.includes('licdn.com') || img.includes('linkedin.com'))) {
                     setLinkedInProfileImageInfo('Currently using LinkedIn profile picture. You can replace it with a custom image.');
                 } else {
                     setLinkedInProfileImageInfo('');
@@ -64,6 +64,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
             // Set contact email from portfolio data
             if (portfolio.personalInfo?.email) {
                 setContactEmail(portfolio.personalInfo.email);
+            } else if ((portfolio as any).contactEmail) {
+                setContactEmail((portfolio as any).contactEmail);
             }
 
             // Set social links from portfolio data
@@ -136,16 +138,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
 
     const handleLogout = () => {
         authAPI.logout();
-        setIsAuthenticated(false);
-        setPassword('');
-        onBackToPortfolio();
+        window.location.href = '/login'; // Redirect to login page
     };
 
     const handleCvUrlsUpdate = async () => {
         try {
             setCvUpdateMessage({ text: 'Updating CV URLs...', type: 'info' });
 
-            const updatedPortfolio = await portfolioAPI.updatePortfolio({
+            const updatedPortfolio = await portfolioAPI.updateProfile({
                 cvViewUrl,
                 cvDownloadUrl
             });
@@ -177,7 +177,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
                     const result = await portfolioAPI.uploadProfileImage(file);
 
                     // Update with the returned image URL
-                    setProfileImageUrl(result.imageUrl);
+                    setProfileImageUrl((result as any).profileImageUrl);
                     setProfileUpdateMessage({
                         text: 'Profile image uploaded and updated successfully!',
                         type: 'info'
@@ -191,9 +191,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
                 }
             }
 
-            // If it's a URL string, just update the portfolio
-            const updatedPortfolio = await portfolioAPI.updatePortfolio({
-                profileImage: profileImageUrl
+            // If it's a URL string, just update the portfolio (server uses profileImageUrl)
+            const updatedPortfolio = await portfolioAPI.updateProfile({
+                profileImageUrl: profileImageUrl
             });
 
             setPortfolioData(updatedPortfolio);
@@ -214,14 +214,14 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
         try {
             setContactUpdateMessage({ text: 'Updating contact email...', type: 'info' });
 
-            const updatedPortfolio = await portfolioAPI.updatePortfolio({
-                personalInfo: {
-                    ...(portfolioData?.personalInfo || {}),
-                    email: contactEmail
-                }
+            // Server expects contactEmail at root of profile
+            const updatedPortfolio = await portfolioAPI.updateProfile({
+                contactEmail: contactEmail
             });
 
             setPortfolioData(updatedPortfolio);
+            // Ensure latest data is loaded (and normalized) after update
+            await loadPortfolioData();
             setContactUpdateMessage({
                 text: 'Contact email updated successfully! The changes are now live on your portfolio.',
                 type: 'info'
@@ -239,7 +239,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
         try {
             setSocialUpdateMessage({ text: 'Updating social links...', type: 'info' });
 
-            const updatedPortfolio = await portfolioAPI.updatePortfolio({
+            const updatedPortfolio = await portfolioAPI.updateProfile({
                 socialLinks: {
                     ...(portfolioData?.socialLinks || {}),
                     github: githubUrl,
@@ -248,6 +248,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
             });
 
             setPortfolioData(updatedPortfolio);
+            await loadPortfolioData();
             setSocialUpdateMessage({
                 text: 'Social links updated successfully! The changes are now live on your portfolio.',
                 type: 'info'
@@ -476,7 +477,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
                                                         await portfolioAPI.deleteProfileImage();
                                                     } else {
                                                         // Otherwise just update with empty string
-                                                        await portfolioAPI.updatePortfolio({
+                                                        await portfolioAPI.updateProfile({
                                                             profileImage: ''
                                                         });
                                                     }

@@ -18,13 +18,14 @@ const Contact: React.FC<ContactProps> = ({ language }) => {
         github: string;
         address: string;
     }>({
-        email: import.meta.env.VITE_CONTACT_EMAIL || '',
+        email: '',
         phone: '',
-        linkedin: import.meta.env.VITE_LINKEDIN_URL || '', // Load from env with fallback
-        github: import.meta.env.VITE_GITHUB_URL || '', // Load from env with fallback
+        linkedin: '',
+        github: '',
         address: ''
     });
     const [isLoading, setIsLoading] = useState(true);
+    const [authError, setAuthError] = useState<string | null>(null);
 
     // Initialize EmailJS with public key
     useEffect(() => {
@@ -45,35 +46,38 @@ const Contact: React.FC<ContactProps> = ({ language }) => {
             setIsLoading(true);
             try {
                 // Try to load from portfolio API first
-                const portfolio = await portfolioAPI.getPortfolio();
+                const portfolio = await portfolioAPI.getProfile();
                 setPortfolioData(portfolio);
 
                 if (portfolio && portfolio.personalInfo) {
                     setContactData(prevData => ({
-                        email: import.meta.env.VITE_CONTACT_EMAIL || prevData.email, // Always use env var for email
+                        email: prevData.email || portfolio.personalInfo.email || '',
                         phone: portfolio.personalInfo.phone || prevData.phone,
-                        linkedin: import.meta.env.VITE_LINKEDIN_URL || portfolio.socialLinks?.linkedin || prevData.linkedin, // Prioritize env var
-                        github: import.meta.env.VITE_GITHUB_URL || portfolio.socialLinks?.github || prevData.github, // Prioritize env var
+                        linkedin: portfolio.socialLinks?.linkedin || prevData.linkedin,
+                        github: portfolio.socialLinks?.github || prevData.github,
                         address: portfolio.personalInfo.location || prevData.address
                     }));
                 }
 
-                // If we don't have contact info from portfolio, try LinkedIn
-                else {
+                setAuthError(null);
+
+                // If we don't have contact info from portfolio, try LinkedIn (address only)
+                if (!portfolio || !portfolio.personalInfo) {
                     const linkedInProfile = getCachedLinkedInProfile();
                     if (linkedInProfile) {
                         // LinkedIn doesn't typically provide all contact info, but we can set what we have
-                        // and keep the portfolio LinkedIn and GitHub URLs for API access
+                        // address only from cached LinkedIn
                         setContactData(prev => ({
                             ...prev,
-                            email: prev.email, // LinkedIn API doesn't provide email directly
-                            phone: prev.phone, // LinkedIn API doesn't provide phone directly
+                            email: prev.email,
+                            phone: prev.phone,
                             address: linkedInProfile.location || prev.address
                         }));
                     }
                 }
             } catch (error) {
                 console.error('Error loading contact data:', error);
+                // Public contact section should not prompt for auth; rely on env/profile fallbacks
             } finally {
                 setIsLoading(false);
             }

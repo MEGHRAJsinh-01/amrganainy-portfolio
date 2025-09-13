@@ -1,20 +1,28 @@
-# Amr Elganainy Portfolio
+# Amr Elganainy Portfolio Platform
 
-A modern, responsive portfolio website built with React, TypeScript, and Tailwind CSS. Featuring dynamic GitHub integration, LinkedIn profile fetching, MongoDB backend, and an admin panel.
+A modern, multi-user portfolio platform built 6. Open [http://localhost:5173](http://localhost:5173) in your browser
+
+   **Default Routes:**
+   - `/` - Redirects to login if not authenticated, dashboard if authenticated
+   - `/login` - User login page
+   - `/register` - User registration page
+   - `/dashboard` - User portfolio management dashboard
+   - `/u/:username` - Public portfolio display for any user
+   - `/admin` - Admin dashboard (admin users only)ith React, TypeScript, and Tailwind CSS. Multiple users can register, create, and manage their own professional portfolios with dynamic GitHub integration, LinkedIn profile fetching, and MongoDB backend.
 
 ## 🌟 Features
 
-### Frontend Features
-- **Dynamic Skills**: Automatically extracts and displays skills from GitHub repositories
-- **Project Showcase**: Displays GitHub projects with stars, forks, and descriptions
-- **LinkedIn Integration**: Fetches professional bio, education, and skills from LinkedIn
-- **Contact Form**: Functional contact form with EmailJS integration
-- **Admin Panel**: Control project visibility, manage cache, update CV links and profile image
-- **Responsive Design**: Mobile-first design with Tailwind CSS
-- **Dark Theme**: Modern dark theme optimized for developer portfolios
-- **CV Section**: Display and download links to your resume/CV
-- **Profile Image Management**: Upload and manage your profile picture
-- **Internationalization**: Support for English and German languages
+### Multi-User Platform
+- **User Registration**: Users can create accounts with LinkedIn and GitHub integration
+- **Personal Portfolios**: Each user gets their own portfolio at `/u/username`
+- **Dashboard Management**: Users can manage their profile, projects, and settings
+- **Admin Panel**: Platform administrators can manage all users and system settings
+
+### Dynamic Content Integration
+- **GitHub Integration**: Automatically sync repositories and extract skills
+- **LinkedIn Integration**: Fetch professional bio and experience data
+- **Project Management**: Control project visibility and custom project creation
+- **Skills Extraction**: Auto-generate skills from GitHub repositories and LinkedIn
 
 ### Backend Features
 - **MongoDB Database**: Store portfolio data, projects, and user information
@@ -148,46 +156,15 @@ This separation ensures that sensitive configuration stays in environment files 
 
 ## 📊 Admin Panel
 
-Access the admin panel by adding `#admin` to the URL. Use the password set in your `VITE_ADMIN_PASSWORD` environment variable.
+The admin panel provides platform administrators with tools to manage the entire multi-user portfolio platform.
 
-Features:
-- **Portfolio Content Management**: Manage all portfolio content through the database:
-  - **Profile Image**: Upload, update, or remove your profile picture
-  - **CV URLs**: Update your CV viewing and download links
-  - **Contact Information**: Manage email and social media links
-  - **Bio Information**: This is primarily pulled from LinkedIn but can be customized
-- **Project Visibility**: Control which GitHub repositories are displayed
-- **Cache Management**: Clear GitHub, LinkedIn, and skills caches
-- **Authentication**: Secure JWT-based login system
+**Access:** Admin users can access the admin dashboard at `/admin`
 
-### Portfolio Settings in Database
-
-All portfolio content settings are stored in the database and managed through the admin panel rather than environment variables:
-
-- **Profile Image**: Upload a custom image or use your LinkedIn profile image
-- **CV URLs**: Viewing and download URLs for your resume
-- **Contact Email**: Your contact email address
-- **Social Links**: GitHub, LinkedIn, and other social media URLs
-
-This approach provides several benefits:
-1. **Easy Updates**: Change portfolio content without editing configuration files
-2. **Dynamic Management**: Update content without redeploying the application
-3. **Separation of Concerns**: Configuration files only contain technical settings, not content
-4. **User-Friendly**: Non-technical users can update content through the UI
-
-### How Portfolio Content Management Works
-
-1. **Initial Setup**: When the server starts for the first time, a portfolio settings document is created in MongoDB with empty default values.
-2. **Admin Panel Access**: Log in to the admin panel by adding `#admin` to the URL and entering your password.
-3. **Content Management**: Use the admin panel forms to:
-   - Upload a profile image (stored on server with path saved in the database)
-   - Update CV viewing and download URLs (stored in database)
-   - Set your contact email (stored in database)
-   - Update your GitHub and LinkedIn URLs (stored in database)
-4. **Instant Updates**: Changes are saved to the database and take effect immediately without requiring server restart.
-5. **Content Retrieval**: The frontend fetches these settings from the database through the `/api/portfolio` endpoint.
-
-No environment variables are used for content, keeping your configuration files clean and focused on technical settings only.
+**Features:**
+- **User Management**: View all registered users, their portfolios, and account details
+- **User Analytics**: Monitor platform usage and user activity
+- **System Administration**: Manage platform settings and configurations
+- **Content Moderation**: Review and manage user-generated content
 
 ## 📚 Integration Guides
 
@@ -244,31 +221,34 @@ The portfolio uses Apify to fetch LinkedIn profile data:
 ## 🏗️ Project Structure
 
 ```
-├── client/            # Frontend application
-│   ├── public/        # Static assets
+├── client/                    # Frontend application
+│   ├── public/                # Static assets
 │   ├── src/
-│   │   ├── api.ts     # API client for backend communication
-│   │   ├── components/ # React components
-│   │   │   ├── About.tsx # About section with LinkedIn data
-│   │   │   ├── AdminPanel.tsx # Admin controls
-│   │   │   ├── Contact.tsx # Contact form with EmailJS
-│   │   │   ├── CVSection.tsx # CV view/download section
-│   │   │   ├── Header.tsx # Navigation header
-│   │   │   ├── Projects.tsx # GitHub projects showcase
-│   │   │   └── ...       # Other components
-│   │   ├── constants.ts  # Static data and translations
-│   │   ├── githubService.ts # GitHub and LinkedIn API integration
-│   │   ├── types.ts     # TypeScript interfaces
-│   │   └── App.tsx     # Main application component
-│   ├── index.tsx       # Entry point
-│   ├── index.html      # HTML template
-│   ├── vite.config.ts  # Vite configuration
-│   └── .env.local      # Frontend environment variables (not in repo)
-├── server/            # Backend server
-│   ├── uploads/       # Uploaded files directory
-│   ├── server.js      # Express server implementation
-│   └── .env.production # Backend environment variables (not in repo)
-└── package.json       # Root package.json with scripts to run both client and server
+│   │   ├── components/        # React components
+│   │   │   ├── auth/          # Authentication components (Login, Register)
+│   │   │   ├── UserDashboard.tsx    # User portfolio management
+│   │   │   ├── AdminDashboard.tsx   # Admin user management
+│   │   │   ├── UserPortfolio.tsx    # Public portfolio display
+│   │   │   └── ...            # Other components
+│   │   ├── contexts/          # React contexts (Auth, Profile, Project, Admin)
+│   │   ├── pages/             # Portfolio display pages
+│   │   ├── api.ts             # API client for backend communication
+│   │   ├── constants.ts       # Static data and translations
+│   │   ├── githubService.ts   # GitHub and LinkedIn API integration
+│   │   ├── types.ts           # TypeScript interfaces
+│   │   ├── MultiUserApp.tsx   # Main multi-user application
+│   │   └── index.tsx          # Application entry point
+│   ├── index.html             # HTML template
+│   └── vite.config.ts         # Vite configuration
+├── server/                    # Backend server
+│   ├── controllers/           # Route handlers
+│   ├── models/                # MongoDB models (User, Profile, Project)
+│   ├── routes/                # API routes
+│   ├── middleware/            # Express middleware
+│   ├── config/                # Configuration management
+│   ├── uploads/               # File upload directory
+│   └── server.js              # Express server implementation
+└── package.json               # Root package.json with scripts
 ```
 
 ## 🔄 Data Caching

@@ -1,16 +1,35 @@
 import React, { useState } from 'react';
 import { Project } from '../types';
-import { translations } from '../constants';
+import { translations, API_URL } from '../constants';
 import { fetchGitHubRepos, getCachedRepos, setCachedRepos, transformGitHubRepoToProject } from '../githubService';
+import { projectAPI } from '../api/multiUserApi';
 import ProjectCard from './ProjectCard';
 import VideoModal from './VideoModal';
 import ProjectDetailModal from './ProjectDetailModal';
 
 interface ProjectsProps {
     language: string;
+    // Optional: username for public portfolio view (/u/:username)
+    username?: string;
 }
 
-const Projects: React.FC<ProjectsProps> = ({ language }) => {
+// Helper to ensure image URLs are absolute when coming from backend '/uploads'
+const ensureFullImageUrl = (url?: string): string | undefined => {
+    if (!url) return url;
+    if (/^https?:\/\//i.test(url)) return url;
+    if (url.startsWith('/uploads/')) {
+        try {
+            const api = new URL(API_URL);
+            const origin = `${api.protocol}//${api.host}`;
+            return `${origin}${url}`;
+        } catch {
+            return `${window.location.origin}${url}`;
+        }
+    }
+    return url;
+};
+
+const Projects: React.FC<ProjectsProps> = ({ language, username }) => {
     const [modalState, setModalState] = useState({ isOpen: false, videoUrl: '', title: { en: '', de: '' } });
     const [projectDetailState, setProjectDetailState] = useState({ isOpen: false, project: null as Project | null });
     const [dynamicProjects, setDynamicProjects] = useState<Project[]>([]);
@@ -39,21 +58,45 @@ const Projects: React.FC<ProjectsProps> = ({ language }) => {
                 setIsLoading(true);
                 setError(null);
 
-                // Try to get cached data first
+                // If we're in a public user portfolio, load curated projects from backend by username
+                if (username) {
+                    const resp = await projectAPI.getUserProjectsByUsername(username);
+                    const list = (resp?.data?.data?.projects || resp?.data?.projects || resp?.data || []) as any[];
+                    // Map backend projects to frontend display model
+                    const mapped: Project[] = list
+                        .filter(p => (typeof p.visible === 'boolean' ? p.visible : true))
+                        .sort((a, b) => {
+                            const ao = typeof a.order === 'number' ? a.order : 0;
+                            const bo = typeof b.order === 'number' ? b.order : 0;
+                            return ao - bo;
+                        })
+                        .map(p => ({
+                            id: p._id || p.id,
+                            title: p.title || '',
+                            description: p.description || '',
+                            tags: Array.isArray(p.technologies) ? p.technologies : [],
+                            liveUrl: p.projectUrl || '',
+                            repoUrl: p.githubUrl || '',
+                            imageUrl: ensureFullImageUrl(p.imageUrl),
+                            lastUpdated: p.updatedAt || p.createdAt,
+                            isFeatured: !!p.featured
+                        }));
+                    setDynamicProjects(mapped);
+                    return;
+                }
+
+                // Otherwise, fallback to dynamic GitHub-based projects (legacy behavior)
                 let githubRepos = getCachedRepos();
 
                 if (!githubRepos) {
-                    // Fetch from GitHub API
                     githubRepos = await fetchGitHubRepos();
                     setCachedRepos(githubRepos);
                 }
 
-                // Transform GitHub repos to project format
                 const transformedProjects = githubRepos
                     .map(repo => transformGitHubRepoToProject(repo, language))
                     .filter(project => project !== null) as Project[];
 
-                // Sort: featured projects first, then by last updated date
                 const sortedProjects = transformedProjects.sort((a, b) => {
                     if (a.isFeatured && !b.isFeatured) return -1;
                     if (!a.isFeatured && b.isFeatured) return 1;
@@ -71,7 +114,7 @@ const Projects: React.FC<ProjectsProps> = ({ language }) => {
         };
 
         loadProjects();
-    }, [language]);
+    }, [language, username]);
 
     // Use dynamic projects as the main projects list
     const allProjects = dynamicProjects;
@@ -87,15 +130,20 @@ const Projects: React.FC<ProjectsProps> = ({ language }) => {
                 {isLoading && (
                     <div className="flex justify-center items-center py-20">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400"></div>
-                        <span className="ml-4 text-gray-400">Loading projects from GitHub...</span>
+                        <span className="ml-4 text-gray-400">{username ? 'Loading projects...' : 'Loading projects from GitHub...'}</span>
                     </div>
                 )}
 
                 {error && (
                     <div className="text-center py-10">
                         <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-6 max-w-md mx-auto">
-                            <p className="text-red-400 mb-2">Failed to load GitHub projects</p>
-                            <p className="text-gray-400 text-sm">Showing manual projects only</p>
+                            <div className="flex items-center gap-2 mb-3">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                                <h3 className="text-red-400 text-lg font-bold">Projects are unavailable</h3>
+                            </div>
+                            <p className="text-gray-300">We couldn’t load the projects right now.</p>
                         </div>
                     </div>
                 )}

@@ -1,14 +1,54 @@
 import { GitHubRepo, CachedData, Project, LinkedInProfileData, LinkedInAdditionalProfileData, LinkedInCacheData, LinkedInAdditionalCacheData } from './types';
-import { GITHUB_USERNAME, CACHE_KEY, CACHE_DURATION, VISIBILITY_KEY, personalInfo, CLOUD_API_URL, LOCAL_API_URL } from './constants';
+import { GITHUB_USERNAME, CACHE_DURATION, VISIBILITY_KEY, personalInfo, CLOUD_API_URL, LOCAL_API_URL } from './constants';
 import { translateText } from './translationService';
 
 export const SKILLS_CACHE_KEY = 'github_skills_cache';
 export const README_CACHE_KEY = 'github_readme_cache'; // Keeping for backward compatibility
+// Use a dedicated, namespaced key for GitHub repos cache to avoid collisions with any auth tokens or other caches
+export const GITHUB_REPOS_CACHE_KEY = 'github_repos_cache_v1';
 
 export interface SkillsData {
     programmingLanguages: string[];
     otherSkills: string[];
 }
+
+// --- Helpers to normalize social link inputs (URL or plain handle) ---
+const normalizeGitHubUsername = (value?: string): string => {
+    if (!value) return '';
+    let v = value.trim();
+    if (!v) return '';
+    // If it looks like a full URL, parse it
+    if (/^https?:\/\//i.test(v) || v.includes('github.com')) {
+        try {
+            // Ensure we have a valid URL string
+            if (!/^https?:\/\//i.test(v)) v = `https://${v.replace(/^\/+/, '')}`;
+            const url = new URL(v);
+            if (!url.hostname.toLowerCase().includes('github.com')) return '';
+            // First path segment is the username
+            const seg = url.pathname.replace(/^\/+/, '').split('/')[0];
+            return seg?.replace(/^@/, '').replace(/\s+/g, '') || '';
+        } catch {
+            // Fall through to handle as raw
+        }
+    }
+    // Otherwise treat it as a raw username/handle
+    return v.replace(/^@/, '').replace(/\/$/, '').trim();
+};
+
+const normalizeLinkedInUrl = (value?: string): string => {
+    if (!value) return '';
+    let v = value.trim();
+    if (!v) return '';
+    // If it already includes linkedin.com, ensure it has protocol and return
+    if (v.toLowerCase().includes('linkedin.com')) {
+        if (!/^https?:\/\//i.test(v)) v = `https://${v.replace(/^\/+/, '')}`;
+        // Normalize trailing slash
+        return v.replace(/\s+/g, '');
+    }
+    // If it's a handle, construct profile URL
+    const handle = v.replace(/^@/, '').replace(/\/$/, '').trim();
+    return handle ? `https://www.linkedin.com/in/${handle}` : '';
+};
 
 export const fetchGitHubRepos = async (): Promise<GitHubRepo[]> => {
     try {
@@ -21,35 +61,46 @@ export const fetchGitHubRepos = async (): Promise<GitHubRepo[]> => {
                 ? CLOUD_API_URL
                 : LOCAL_API_URL;
 
-            // Try to get portfolio data which contains social links
-            const portfolioResponse = await fetch(`${apiBaseUrl}/portfolio`);
-            if (portfolioResponse.ok) {
-                const portfolioData = await portfolioResponse.json();
-                // Extract GitHub username from GitHub URL if available
-                if (portfolioData?.socialLinks?.github) {
-                    const githubUrl = portfolioData.socialLinks.github;
-                    // Extract username from GitHub URL
-                    const match = githubUrl.match(/github\.com\/([^\/]+)/);
-                    if (match && match[1]) {
-                        username = match[1];
-                    }
+            // Try to get profile data which contains social links
+            // Detect public username from /u/:username and use public endpoint if present
+            const path = window.location?.pathname || '';
+            const match = path.match(/^\/?u\/([^\/?#]+)(?:[\/?#].*)?$/i);
+            const publicUsername = match && match[1] ? decodeURIComponent(match[1]) : '';
+
+            const profileUrl = publicUsername
+                ? `${apiBaseUrl.replace(/\/api$/, '/api')}/profiles/username/${encodeURIComponent(publicUsername)}`
+                : `${apiBaseUrl}/profile/me`;
+
+            // Include auth header when calling protected '/profile/me'
+            const headers: Record<string, string> = {};
+            if (!publicUsername) {
+                const token = localStorage.getItem('token');
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+            }
+            const profileResponse = await fetch(profileUrl, { headers });
+            if (profileResponse.ok) {
+                const raw = await profileResponse.json();
+                // Support both flattened and nested API response shapes
+                const profileData = (raw?.data?.profile) || raw?.profile || raw?.data || raw;
+                // Extract GitHub username from socialLinks.github which can be a URL or a plain handle
+                if (profileData?.socialLinks?.github) {
+                    const extracted = normalizeGitHubUsername(profileData.socialLinks.github);
+                    if (extracted) username = extracted;
                 }
             }
         } catch (err) {
-            console.error('Error fetching GitHub username from portfolio data:', err);
+            console.error('Error fetching GitHub username from profile data:', err);
         }
 
-        // Fallback to environment variable if not found in database
-        if (!username) {
-            username = GITHUB_USERNAME;
-        }
-
-        // If still no username, throw error
+        // If no username, throw error
         if (!username) {
             throw new Error('GitHub username not configured. Please set it in the admin panel Social Links section.');
         }
 
-        const response = await fetch(`https://api.github.com/users/${username}/repos?sort=pushed&per_page=100`);
+        // Use server proxy with caching instead of hitting GitHub directly
+        const isProd = import.meta.env.MODE === 'production';
+        const apiBaseUrl = isProd ? CLOUD_API_URL : LOCAL_API_URL;
+        const response = await fetch(`${apiBaseUrl}/github-repos?username=${encodeURIComponent(username)}`);
         if (!response.ok) {
             throw new Error(`GitHub API error: ${response.status}`);
         }
@@ -62,14 +113,14 @@ export const fetchGitHubRepos = async (): Promise<GitHubRepo[]> => {
 
 export const getCachedRepos = (): GitHubRepo[] | null => {
     try {
-        const cached = localStorage.getItem(CACHE_KEY);
+        const cached = localStorage.getItem(GITHUB_REPOS_CACHE_KEY);
         if (!cached) return null;
 
         const parsed: CachedData = JSON.parse(cached);
         const now = Date.now();
 
         if (now - parsed.timestamp > CACHE_DURATION) {
-            localStorage.removeItem(CACHE_KEY);
+            localStorage.removeItem(GITHUB_REPOS_CACHE_KEY);
             return null;
         }
 
@@ -86,7 +137,7 @@ export const setCachedRepos = (repos: GitHubRepo[]): void => {
             data: repos,
             timestamp: Date.now()
         };
-        localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+        localStorage.setItem(GITHUB_REPOS_CACHE_KEY, JSON.stringify(cacheData));
     } catch (error) {
         console.error('Error setting cache:', error);
     }
@@ -94,7 +145,7 @@ export const setCachedRepos = (repos: GitHubRepo[]): void => {
 
 export const clearGitHubCache = () => {
     try {
-        localStorage.removeItem(CACHE_KEY);
+        localStorage.removeItem(GITHUB_REPOS_CACHE_KEY);
         console.log('GitHub cache cleared successfully');
         return true;
     } catch (error) {
@@ -334,9 +385,10 @@ export const clearSkillsCache = () => {
 // --- LinkedIn Profile Bio Functions ---
 export const LINKEDIN_USERNAME = '';
 export const LINKEDIN_PROFILE_URL = '';
-export const LINKEDIN_CACHE_KEY = '';
-export const LINKEDIN_ADDITIONAL_CACHE_KEY = '';
-export const LINKEDIN_COMPANY_CACHE_KEY = '';
+// Concrete cache keys for LinkedIn data
+export const LINKEDIN_CACHE_KEY = 'linkedin_profile_cache_v1';
+export const LINKEDIN_ADDITIONAL_CACHE_KEY = 'linkedin_additional_profile_cache_v1';
+export const LINKEDIN_COMPANY_CACHE_KEY = 'linkedin_company_cache_v1';
 export const APIFY_ACTOR_ID = '';
 export const CACHE_DURATION_LONG = 7 * 24 * 60 * 60 * 1000; // 7 days for LinkedIn data
 
@@ -372,27 +424,38 @@ export const fetchLinkedInProfile = async (): Promise<LinkedInProfileData> => {
                 ? CLOUD_API_URL
                 : LOCAL_API_URL;
 
-            // Try to get portfolio data which contains social links
-            const portfolioResponse = await fetch(`${apiBaseUrl}/portfolio`);
-            if (portfolioResponse.ok) {
-                const portfolioData = await portfolioResponse.json();
-                if (portfolioData?.socialLinks?.linkedin) {
-                    linkedinUrl = portfolioData.socialLinks.linkedin;
+            // Try to get profile data which contains social links
+            // Detect public username and use public endpoint if present
+            const path = window.location?.pathname || '';
+            const match = path.match(/^\/?u\/([^\/?#]+)(?:[\/?#].*)?$/i);
+            const publicUsername = match && match[1] ? decodeURIComponent(match[1]) : '';
+            const profileUrl = publicUsername
+                ? `${apiBaseUrl.replace(/\/api$/, '/api')}/profiles/username/${encodeURIComponent(publicUsername)}`
+                : `${apiBaseUrl}/profile/me`;
+
+            // Include auth header when calling protected '/profile/me'
+            const headers: Record<string, string> = {};
+            if (!publicUsername) {
+                const token = localStorage.getItem('token');
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+            }
+            const profileResponse = await fetch(profileUrl, { headers });
+            if (profileResponse.ok) {
+                const raw = await profileResponse.json();
+                // Support both flattened and nested API response shapes
+                const profileData = (raw?.data?.profile) || raw?.profile || raw?.data || raw;
+                if (profileData?.socialLinks?.linkedin) {
+                    linkedinUrl = normalizeLinkedInUrl(profileData.socialLinks.linkedin);
                 }
             }
         } catch (err) {
-            console.error('Error fetching LinkedIn URL from portfolio data:', err);
-        }
-
-        // Fallback to environment variable if not found in database
-        if (!linkedinUrl) {
-            linkedinUrl = import.meta.env.VITE_LINKEDIN_URL;
+            console.error('Error fetching LinkedIn URL from profile data:', err);
         }
 
         console.log('Fetching LinkedIn profile using proxy for:', linkedinUrl);
 
         if (!linkedinUrl) {
-            throw new Error('LinkedIn profile URL is not configured in environment variables or admin panel');
+            throw new Error('LinkedIn profile URL is not configured in the admin panel Social Links section.');
         }
 
         // Use our proxy server instead of calling Apify directly
@@ -910,10 +973,10 @@ export const getDynamicBio = async (): Promise<{ en: string; de: string }> => {
             // Check if we got usable data
             const dataQualityCheck = checkLinkedInDataQuality(linkedInProfile);
 
-            // If data quality is poor, use fallback
+            // If data quality is poor, return empty
             if (!dataQualityCheck.isUsable) {
                 console.warn('LinkedIn API returned poor quality data:', dataQualityCheck.issues);
-                return createFallbackBio();
+                return { en: '', de: '' };
             }
 
             // Cache the profile data
@@ -948,8 +1011,8 @@ export const getDynamicBio = async (): Promise<{ en: string; de: string }> => {
                 }
             }
 
-            // For other errors, use the fallback bio
-            return await createFallbackBio();
+            // For other errors, return empty bio (no synthetic fallback)
+            return { en: '', de: '' };
         }
     } catch (error) {
         console.error('Error fetching dynamic bio:', error);
@@ -960,8 +1023,8 @@ export const getDynamicBio = async (): Promise<{ en: string; de: string }> => {
                 error.message.includes('timed out'))) {
             throw error;
         }
-        // Use fallback bio
-        return await createFallbackBio();
+        // Return empty bio
+        return { en: '', de: '' };
     }
 };
 
@@ -1013,45 +1076,7 @@ const checkLinkedInDataQuality = (profileData: LinkedInProfileData) => {
     return { isUsable, issues };
 };
 
-// Helper function to create a fallback bio
-const createFallbackBio = async (): Promise<{ en: string; de: string }> => {
-    // Create a rich, manually crafted bio that looks professional
-    const richEnglishBio = `Amr Elganainy is a Computer Science Graduate and Internet Security Master's Student with a passion for web development and cybersecurity. 
-
-With expertise in JavaScript, TypeScript, React, and Node.js, Amr builds modern web applications that combine excellent user experience with robust security features.
-
-His background in both computer science and internet security provides a unique perspective when developing software, ensuring that applications are not only functional and user-friendly but also secure and reliable.
-
-Amr is constantly exploring new technologies and frameworks to improve his skills and deliver high-quality software solutions.`;
-
-    // Translate the English bio to German
-    try {
-        console.log('Translating fallback bio to German...');
-        const germanBio = await translateText(richEnglishBio, 'en', 'de');
-        console.log('Fallback bio successfully translated');
-
-        return {
-            en: richEnglishBio,
-            de: germanBio
-        };
-    } catch (error) {
-        console.error('Error translating fallback bio:', error);
-
-        // Fallback to a manually translated version if API fails
-        const manualGermanBio = `Amr Elganainy ist Computer Science Absolvent und Student für Internet Security mit einer Leidenschaft für Webentwicklung und Cybersicherheit.
-
-Mit Expertise in JavaScript, TypeScript, React und Node.js entwickelt Amr moderne Webanwendungen, die hervorragende Benutzererfahrung mit robusten Sicherheitsfunktionen kombinieren.
-
-Sein Hintergrund in Informatik und Internet-Sicherheit bietet eine einzigartige Perspektive bei der Softwareentwicklung und stellt sicher, dass Anwendungen nicht nur funktional und benutzerfreundlich, sondern auch sicher und zuverlässig sind.
-
-Amr erforscht ständig neue Technologien und Frameworks, um seine Fähigkeiten zu verbessern und hochwertige Softwarelösungen zu liefern.`;
-
-        return {
-            en: richEnglishBio,
-            de: manualGermanBio
-        };
-    }
-};
+// Removed synthetic fallback bio to adhere to "no fallback data" policy
 
 export const clearLinkedInCache = () => {
     try {

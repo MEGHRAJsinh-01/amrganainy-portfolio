@@ -22,45 +22,40 @@ mongoose.connect(config.database.mongoUri, config.database.options)
     .then(() => console.log('MongoDB connected'))
     .catch(err => console.error('MongoDB connection error:', err));
 
-// Configure multer for file uploads
+// Configure uploads directory
 const uploadDir = path.join(__dirname, 'uploads');
 fs.ensureDirSync(uploadDir);
-
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        const ext = path.extname(file.originalname);
-        cb(null, file.fieldname + '-' + uniqueSuffix + ext);
-    }
-});
-
-const upload = multer({
-    storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-    fileFilter: (req, file, cb) => {
-        // Accept only images
-        if (file.mimetype.startsWith('image/')) {
-            cb(null, true);
-        } else {
-            cb(new Error('Only image files are allowed'));
-        }
-    }
-});
 
 // Serve static files from uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Enable CORS with configuration from config module
 app.use(cors({
-    origin: config.frontend.corsOrigins,
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    credentials: true
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+
+        // Check if the origin is in our allowed list
+        if (config.frontend.corsOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+
+        // For development, allow localhost origins
+        if (origin.startsWith('http://localhost:')) {
+            return callback(null, true);
+        }
+
+        return callback(new Error('Not allowed by CORS'));
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    credentials: true,
+    optionsSuccessStatus: 200 // Some legacy browsers choke on 204
 }));
 
 app.use(express.json());
+
+// Simple in-memory cache store
+app.locals.cacheStore = app.locals.cacheStore || new Map();
 
 // Simple health check endpoint
 app.get('/api/health', (req, res) => {
@@ -72,82 +67,28 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// -------------------- Database Schemas --------------------
+// Import routes
+const authRoutes = require('./routes/auth.routes');
+const profileRoutes = require('./routes/profile.routes');
+const projectRoutes = require('./routes/project.routes');
+// const adminRoutes = require('./routes/admin.routes');
+// const filesRoutes = require('./routes/files');
 
-// User Schema (for admin authentication)
-const userSchema = new mongoose.Schema({
-    username: { type: String, required: true, unique: true },
-    password: { type: String, required: true },
-    isAdmin: { type: Boolean, default: false }
-});
-
-// Portfolio Schema
-const portfolioSchema = new mongoose.Schema({
-    profileImage: { type: String },
-    cvViewUrl: { type: String },
-    cvDownloadUrl: { type: String },
-    personalInfo: {
-        name: { type: String },
-        title: { type: String },
-        email: { type: String },
-        phone: { type: String },
-        location: { type: String },
-        bio: { type: String }
-    },
-    socialLinks: {
-        github: { type: String },
-        linkedin: { type: String },
-        twitter: { type: String }
-    },
-    lastUpdated: { type: Date, default: Date.now }
-});
-
-// Project Schema
-const projectSchema = new mongoose.Schema({
-    title: { type: String, required: true },
-    description: { type: String, required: true },
-    technologies: [{ type: String }],
-    imageUrl: { type: String },
-    githubUrl: { type: String },
-    liveUrl: { type: String },
-    featured: { type: Boolean, default: false },
-    order: { type: Number, default: 0 }
-});
-
-// Create models
-const User = mongoose.model('User', userSchema);
-const Portfolio = mongoose.model('Portfolio', portfolioSchema);
-const Project = mongoose.model('Project', projectSchema);
-
-// -------------------- Authentication Middleware --------------------
-
-const verifyToken = (req, res, next) => {
-    const token = req.headers.authorization?.split(' ')[1];
-
-    if (!token) {
-        return res.status(401).json({ message: 'No token provided' });
-    }
-
-    try {
-        const decoded = jwt.verify(token, config.auth.jwtSecret);
-        req.user = decoded;
-        next();
-    } catch (error) {
-        return res.status(401).json({ message: 'Invalid token' });
-    }
-};
-
-const isAdmin = (req, res, next) => {
-    if (!req.user.isAdmin) {
-        return res.status(403).json({ message: 'Requires admin privileges' });
-    }
-    next();
-};
+// Use routes
+app.use('/api/auth', authRoutes);
+app.use('/api/profile', profileRoutes);
+app.use('/api/profiles', profileRoutes); // Add alias for plural form
+app.use('/api/projects', projectRoutes);
+// app.use('/api/admin', adminRoutes);
+// app.use('/api/files', filesRoutes);
 
 // Initialize admin user if not exists
 const initAdminUser = async () => {
     try {
-        const adminExists = await User.findOne({ username: 'admin' });
+        // Import User model
+        const User = require('./models/user.model');
+
+        const adminExists = await User.findOne({ role: 'admin' });
 
         if (!adminExists) {
             // Check if admin credentials are provided in environment variables
@@ -164,8 +105,10 @@ const initAdminUser = async () => {
 
             await User.create({
                 username: config.auth.admin.username,
+                email: 'admin@example.com', // Default admin email
                 password: hashedPassword,
-                isAdmin: true
+                role: 'admin',
+                isEmailVerified: true
             });
 
             console.log('Admin user created');
@@ -175,312 +118,8 @@ const initAdminUser = async () => {
     }
 };
 
-// Initialize portfolio data if not exists
-const initPortfolioData = async () => {
-    try {
-        const portfolioExists = await Portfolio.findOne({});
-
-        if (!portfolioExists) {
-            await Portfolio.create({
-                // Initialize with empty values - these will be set through the admin panel
-                profileImage: '',
-                cvViewUrl: '',
-                cvDownloadUrl: '',
-                personalInfo: {
-                    name: '',      // Will be loaded from LinkedIn API
-                    title: '',     // Will be loaded from LinkedIn API
-                    email: '',     // Set through admin panel
-                    location: '',  // Will be loaded from LinkedIn API
-                    bio: ''        // Will be loaded from LinkedIn API
-                },
-                socialLinks: {
-                    github: '',    // Set through admin panel
-                    linkedin: '',  // Set through admin panel
-                    twitter: ''    // Set through admin panel
-                }
-            });
-
-            console.log('Portfolio data initialized with empty values - use admin panel to configure');
-        }
-    } catch (error) {
-        console.error('Error initializing portfolio data:', error);
-    }
-};
-
-// Initialize data
-initAdminUser();
-initPortfolioData();
-
-// -------------------- Authentication Routes --------------------
-
-app.post('/api/auth/login', async (req, res) => {
-    try {
-        const { username, password } = req.body;
-
-        const user = await User.findOne({ username });
-        if (!user) {
-            return res.status(401).json({ message: 'Invalid credentials' });
-        }
-
-        const isPasswordValid = await bcrypt.compare(password, user.password);
-        if (!isPasswordValid) {
-            return res.status(401).json({ message: 'Invalid credentials' });
-        }
-
-        const token = jwt.sign(
-            { id: user._id, username: user.username, isAdmin: user.isAdmin },
-            config.auth.jwtSecret,
-            { expiresIn: config.auth.tokenExpiration }
-        );
-
-        res.json({ token, user: { id: user._id, username: user.username, isAdmin: user.isAdmin } });
-    } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-});
-
-// -------------------- Portfolio Routes --------------------
-
-// Helper function to ensure image URLs have proper domain
-const ensureFullUrls = (data) => {
-    if (!data) return data;
-
-    // Create a deep copy to avoid modifying the original
-    const result = JSON.parse(JSON.stringify(data));
-
-    // Function to process URL fields
-    const processUrl = (url) => {
-        if (!url || typeof url !== 'string') return url;
-        if (url.startsWith('http://') || url.startsWith('https://')) return url;
-
-        if (url.startsWith('/uploads/')) {
-            // Use configured server URL or construct from environment
-            const serverUrl = config.uploads.serverUrl ||
-                `${config.server.isProduction ? 'https://' : 'http://'}${config.server.host}:${config.server.port}`;
-            return `${serverUrl}${url}`;
-        }
-
-        return url;
-    };
-
-    // Process profile image
-    if (result.profileImage) {
-        result.profileImage = processUrl(result.profileImage);
-    }
-
-    return result;
-};
-
-// Get portfolio data
-app.get('/api/portfolio', async (req, res) => {
-    try {
-        const portfolio = await Portfolio.findOne({});
-        const processedPortfolio = ensureFullUrls(portfolio);
-        res.json(processedPortfolio || {});
-    } catch (error) {
-        console.error('Error fetching portfolio data:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-});
-
-// Update portfolio data
-app.put('/api/portfolio', verifyToken, isAdmin, async (req, res) => {
-    try {
-        const { personalInfo, socialLinks, cvViewUrl, cvDownloadUrl, profileImage } = req.body;
-
-        // Create update object with only the fields that are provided
-        const updateObj = { lastUpdated: new Date() };
-
-        if (personalInfo) updateObj.personalInfo = personalInfo;
-        if (socialLinks) updateObj.socialLinks = socialLinks;
-        if (cvViewUrl !== undefined) updateObj.cvViewUrl = cvViewUrl;
-        if (cvDownloadUrl !== undefined) updateObj.cvDownloadUrl = cvDownloadUrl;
-        if (profileImage !== undefined) updateObj.profileImage = profileImage;
-
-        const updatedPortfolio = await Portfolio.findOneAndUpdate(
-            {},
-            { $set: updateObj },
-            { new: true, upsert: true }
-        );
-
-        res.json(updatedPortfolio);
-    } catch (error) {
-        console.error('Error updating portfolio data:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-});
-
-// Upload profile image
-app.post('/api/portfolio/profile-image', verifyToken, isAdmin, upload.single('image'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ message: 'No image file uploaded' });
-        }
-
-        const imageUrl = `/uploads/${req.file.filename}`;
-
-        // Use configuration to get full image URL
-        const fullImageUrl = config.uploads.getFullUrl(req, imageUrl);
-        console.log('Generated full image URL:', fullImageUrl);
-
-        // Delete previous profile image if it exists
-        const currentPortfolio = await Portfolio.findOne({});
-        if (currentPortfolio?.profileImage) {
-            // Extract filename from the URL
-            const filenamePart = currentPortfolio.profileImage.split('/').pop();
-            if (filenamePart) {
-                const oldImagePath = path.join(uploadDir, filenamePart);
-                console.log('Checking for old image at:', oldImagePath);
-                if (fs.existsSync(oldImagePath)) {
-                    console.log('Deleting old image:', oldImagePath);
-                    fs.unlinkSync(oldImagePath);
-                }
-            }
-        }
-
-        // Update portfolio with new image URL
-        const updatedPortfolio = await Portfolio.findOneAndUpdate(
-            {},
-            { $set: { profileImage: fullImageUrl, lastUpdated: new Date() } },
-            { new: true, upsert: true }
-        );
-
-        res.json({
-            imageUrl: fullImageUrl,
-            message: 'Profile image uploaded successfully'
-        });
-    } catch (error) {
-        console.error('Error uploading profile image:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-});
-
-// Delete profile image
-app.delete('/api/portfolio/profile-image', verifyToken, isAdmin, async (req, res) => {
-    try {
-        const portfolio = await Portfolio.findOne({});
-
-        if (portfolio?.profileImage && portfolio.profileImage.startsWith('/uploads/')) {
-            const imagePath = path.join(__dirname, portfolio.profileImage);
-            if (fs.existsSync(imagePath)) {
-                fs.unlinkSync(imagePath);
-            }
-        }
-
-        const updatedPortfolio = await Portfolio.findOneAndUpdate(
-            {},
-            { $set: { profileImage: '', lastUpdated: new Date() } },
-            { new: true }
-        );
-
-        res.json({
-            message: 'Profile image deleted successfully',
-            portfolio: updatedPortfolio
-        });
-    } catch (error) {
-        console.error('Error deleting profile image:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-});
-
-// -------------------- Projects Routes --------------------
-
-// Get all projects
-app.get('/api/projects', async (req, res) => {
-    try {
-        const projects = await Project.find().sort({ order: 1 });
-        res.json(projects);
-    } catch (error) {
-        console.error('Error fetching projects:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-});
-
-// Get single project
-app.get('/api/projects/:id', async (req, res) => {
-    try {
-        const project = await Project.findById(req.params.id);
-        if (!project) {
-            return res.status(404).json({ message: 'Project not found' });
-        }
-        res.json(project);
-    } catch (error) {
-        console.error('Error fetching project:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-});
-
-// Create project
-app.post('/api/projects', verifyToken, isAdmin, async (req, res) => {
-    try {
-        const project = new Project(req.body);
-        await project.save();
-        res.status(201).json(project);
-    } catch (error) {
-        console.error('Error creating project:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-});
-
-// Update project
-app.put('/api/projects/:id', verifyToken, isAdmin, async (req, res) => {
-    try {
-        const updatedProject = await Project.findByIdAndUpdate(
-            req.params.id,
-            req.body,
-            { new: true }
-        );
-
-        if (!updatedProject) {
-            return res.status(404).json({ message: 'Project not found' });
-        }
-
-        res.json(updatedProject);
-    } catch (error) {
-        console.error('Error updating project:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-});
-
-// Delete project
-app.delete('/api/projects/:id', verifyToken, isAdmin, async (req, res) => {
-    try {
-        const deletedProject = await Project.findByIdAndDelete(req.params.id);
-
-        if (!deletedProject) {
-            return res.status(404).json({ message: 'Project not found' });
-        }
-
-        res.json({ message: 'Project deleted successfully' });
-    } catch (error) {
-        console.error('Error deleting project:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-});
-
-// Upload project image
-app.post('/api/projects/upload-image', verifyToken, isAdmin, upload.single('image'), async (req, res) => {
-    try {
-        if (!req.file) {
-            return res.status(400).json({ message: 'No image file uploaded' });
-        }
-
-        const imageUrl = `/uploads/${req.file.filename}`;
-
-        // Use configuration to get full image URL
-        const fullImageUrl = config.uploads.getFullUrl(req, imageUrl);
-        console.log('Generated full project image URL:', fullImageUrl);
-
-        res.json({
-            imageUrl: fullImageUrl,
-            message: 'Project image uploaded successfully'
-        });
-    } catch (error) {
-        console.error('Error uploading project image:', error);
-        res.status(500).json({ message: 'Server error' });
-    }
-});
+// Call admin user initialization
+// initAdminUser();
 
 // -------------------- LinkedIn API Proxy --------------------
 
@@ -493,7 +132,7 @@ app.post('/api/linkedin-profile', async (req, res) => {
             console.error('No profile URL provided');
             return res.status(400).json({
                 error: 'Profile URL is required',
-                details: 'Please set your LinkedIn URL in the admin panel Social Links section'
+                details: 'Please set your LinkedIn URL in your profile settings'
             });
         }
 
@@ -511,7 +150,8 @@ app.post('/api/linkedin-profile', async (req, res) => {
         }
 
         console.log('Extracted LinkedIn username:', username);
-        const apiToken = config.services.apify.token; if (!apiToken || apiToken === 'your_apify_token_here') {
+        const apiToken = config.services.apify.token;
+        if (!apiToken || apiToken === 'your_apify_token_here') {
             console.error('API token missing or invalid');
             return res.status(500).json({
                 error: 'Apify API token is missing or invalid in server environment'
@@ -524,7 +164,19 @@ app.post('/api/linkedin-profile', async (req, res) => {
 
         console.log('Calling Apify API at:', apiUrl);
 
-        // Step 1: Start the actor run
+        // Cache key and TTL
+        const cacheKey = `linkedin:${username}`;
+        const now = Date.now();
+        const TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+        // Serve from cache if fresh
+        const cached = app.locals.cacheStore.get(cacheKey);
+        if (cached && now - cached.timestamp < TTL) {
+            console.log('Serving LinkedIn profile from cache');
+            return res.json(cached.data);
+        }
+
+        // Start the actor run
         const startRunResponse = await fetch(apiUrl, {
             method: 'POST',
             headers: {
@@ -532,7 +184,7 @@ app.post('/api/linkedin-profile', async (req, res) => {
             },
             body: JSON.stringify({
                 "includeEmail": true,
-                "username": "amr-elganainy"
+                "username": username
             })
         });
 
@@ -557,98 +209,59 @@ app.post('/api/linkedin-profile', async (req, res) => {
                 return res.status(404).json({ error: 'No LinkedIn profile data returned from Apify' });
             }
 
-            // Return the first profile (as we're only scraping one)
-            console.log('Sending profile data to client');
-            return res.json(runData[0]);
-        }
-
-        // Step 2: If we didn't get direct data in the previous step, then we need to poll for run completion
-        // This happens when using the 'run-sync' endpoint instead of 'run-sync-get-dataset-items'
-        const runId = runData.data && runData.data.id;
-
-        if (!runId) {
-            console.error('No run ID found in response');
+            // Cache and return the first profile (as we're only scraping one)
+            const payload = runData[0];
+            app.locals.cacheStore.set(cacheKey, { data: payload, timestamp: now });
+            console.log('Sending profile data to client (cached)');
+            return res.json(payload);
+        } else {
             return res.status(500).json({
-                error: 'Invalid response from Apify API, no run ID found',
-                details: JSON.stringify(runData).substring(0, 500)
+                error: 'Unexpected response format from Apify API',
+                details: 'Expected an array of profile data'
             });
         }
-
-        console.log('Apify actor run started with ID:', runId);
-        const maxWaitTime = 60000; // 1 minute timeout
-        const startTime = Date.now();
-        let isFinished = false;
-        let runStatus;
-
-        console.log('Polling for run completion...');
-        while (!isFinished && (Date.now() - startTime < maxWaitTime)) {
-            // Wait 2 seconds between status checks
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            // Check run status
-            const statusResponse = await fetch(
-                `https://api.apify.com/v2/actor-runs/${runId}?token=${apiToken}`
-            );
-
-            if (!statusResponse.ok) {
-                console.warn(`Error checking run status: ${statusResponse.status}`);
-                continue;
-            }
-
-            runStatus = await statusResponse.json();
-            console.log('Run status:', runStatus.data.status);
-
-            if (['SUCCEEDED', 'FAILED', 'TIMED-OUT', 'ABORTED'].includes(runStatus.data.status)) {
-                isFinished = true;
-                console.log('Apify actor run finished with status:', runStatus.data.status);
-            } else {
-                console.log('Apify actor run still in progress:', runStatus.data.status);
-            }
-        }
-
-        // Check if the run finished successfully
-        if (!isFinished) {
-            console.error('Apify actor run timed out');
-            return res.status(504).json({ error: 'Apify actor run timed out' });
-        }
-
-        if (runStatus.data.status !== 'SUCCEEDED') {
-            console.error('Apify actor run failed with status:', runStatus.data.status);
-            return res.status(500).json({
-                error: `Apify actor run failed with status: ${runStatus.data.status}`
-            });
-        }
-
-        // Step 3: Get the results
-        console.log('Fetching dataset results...');
-        const resultsResponse = await fetch(
-            `https://api.apify.com/v2/actor-runs/${runId}/dataset/items?token=${apiToken}`
-        );
-
-        if (!resultsResponse.ok) {
-            console.error('Failed to fetch results:', resultsResponse.status, resultsResponse.statusText);
-            return res.status(resultsResponse.status).json({
-                error: `Failed to fetch results: ${resultsResponse.status} ${resultsResponse.statusText}`
-            });
-        }
-
-        const results = await resultsResponse.json();
-        console.log('Results received, items count:', results.length);
-
-        if (!results || results.length === 0) {
-            console.error('No LinkedIn profile data returned');
-            return res.status(404).json({ error: 'No LinkedIn profile data returned from Apify' });
-        }
-
-        // Return the first profile (as we're only scraping one)
-        console.log('Sending profile data to client');
-        res.json(results[0]);
     } catch (error) {
         console.error('Server error:', error);
         res.status(500).json({
             error: 'Server error processing LinkedIn profile request',
             message: error.message
         });
+    }
+});
+
+// -------------------- GitHub Repos Proxy (cached) --------------------
+app.get('/api/github-repos', async (req, res) => {
+    try {
+        const username = String(req.query.username || '').trim();
+        if (!username) {
+            return res.status(400).json({ error: 'Missing username' });
+        }
+
+        const cacheKey = `gh:repos:${username}`;
+        const now = Date.now();
+        const TTL = 24 * 60 * 60 * 1000; // 24 hours
+        const cached = app.locals.cacheStore.get(cacheKey);
+        if (cached && now - cached.timestamp < TTL) {
+            console.log('Serving GitHub repos from cache for', username);
+            return res.json(cached.data);
+        }
+
+        const ghRes = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}/repos?sort=pushed&per_page=100`, {
+            headers: {
+                'User-Agent': 'amrganainy-portfolio'
+            }
+        });
+        if (!ghRes.ok) {
+            const text = await ghRes.text();
+            console.error('GitHub API error:', ghRes.status, text);
+            return res.status(ghRes.status).json({ error: `GitHub API error: ${ghRes.status}` });
+        }
+        const data = await ghRes.json();
+        app.locals.cacheStore.set(cacheKey, { data, timestamp: now });
+        res.json(data);
+    } catch (err) {
+        console.error('GitHub proxy error:', err);
+        res.status(500).json({ error: 'Failed to fetch GitHub repos' });
     }
 });
 

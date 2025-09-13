@@ -32,3 +32,36 @@ server/.env.production
 *.njsproj
 *.sln
 *.sw?
+
+# Development tools and scripts
+server/scripts/dev-tools/
+server/**/test-*.js
+server/**/debug-*.js
+server/**/*-test.js
+server/**/*-debug.js
+server/**/simple-*-server.js
+server/test-admin-panel.js
+server/test-admin-routes.js
+server/test-auth-endpoints.js
+server/test-debug-server.js
+server/test-direct-mongo.js
+server/test-mongo-users.js
+server/test-mongo.js
+server/test-profile-endpoints.js
+server/test-profiles.js
+server/test-project-endpoints.js
+server/test-projects.js
+server/test-register.js
+server/test-server-auth.js
+server/test-simple-debug-server.js
+server/test.js
+server/debug-auth.js
+server/debug-auth-detailed.js
+server/debug-auth-server.js
+server/final-auth-test.js
+server/simple-auth-server.js
+server/simple-debug-server.js
+
+# Additional test and debug files
+server/scripts/cleanup-test-files.js
+server/test.js
