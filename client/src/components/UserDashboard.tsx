@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { GitHubRepo } from '../types';
-import { fetchGitHubRepos, getCachedRepos, clearGitHubCache, clearSkillsCache, clearLinkedInCache } from '../githubService';
+import {
+    fetchGitHubRepos,
+    getCachedRepos,
+    clearGitHubCache,
+    clearSkillsCache,
+    clearLinkedInCache,
+    fetchLinkedInProfile // Import the function
+} from '../githubService';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
 import { useProjects } from '../contexts/ProjectContext';
@@ -399,6 +406,7 @@ const UserDashboard: React.FC = () => {
             try {
                 setIsLoading(true);
                 await uploadCV(file);
+                await getProfile(); // Refetch profile to get updated CV URL
                 setUpdateMessage({
                     text: 'CV uploaded successfully!',
                     type: 'success'
@@ -629,34 +637,6 @@ const UserDashboard: React.FC = () => {
 
                                     <div>
                                         <h3 className="text-lg font-medium mb-4">Social Links</h3>
-
-                                        <div className="mb-4">
-                                            <label className="block text-gray-300 text-sm font-medium mb-2">
-                                                GitHub URL
-                                            </label>
-                                            <input
-                                                type="url"
-                                                name="githubUrl"
-                                                value={formData.githubUrl}
-                                                onChange={handleInputChange}
-                                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:border-blue-500 focus:ring-blue-500"
-                                                placeholder="https://github.com/yourusername"
-                                            />
-                                        </div>
-
-                                        <div className="mb-4">
-                                            <label className="block text-gray-300 text-sm font-medium mb-2">
-                                                LinkedIn URL
-                                            </label>
-                                            <input
-                                                type="url"
-                                                name="linkedinUrl"
-                                                value={formData.linkedinUrl}
-                                                onChange={handleInputChange}
-                                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:border-blue-500 focus:ring-blue-500"
-                                                placeholder="https://linkedin.com/in/yourusername"
-                                            />
-                                        </div>
 
                                         <div className="mb-4">
                                             <label className="block text-gray-300 text-sm font-medium mb-2">
@@ -1128,7 +1108,7 @@ const UserDashboard: React.FC = () => {
                                     </label>
                                     <input
                                         type="text"
-                                        value={profile?.cvFile || ''}
+                                        value={profile?.cvViewUrl || ''}
                                         className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:border-blue-500 focus:ring-blue-500"
                                         placeholder="https://drive.google.com/file/d/YOUR_FILE_ID/view?usp=sharing"
                                         disabled
@@ -1264,13 +1244,50 @@ const UserDashboard: React.FC = () => {
                                             >
                                                 Save LinkedIn URL
                                             </button>
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        setIsLoading(true);
+                                                        const linkedInData = await fetchLinkedInProfile();
+
+                                                        const locationString = typeof linkedInData.location === 'object' && linkedInData.location !== null
+                                                            ? `${(linkedInData.location as any).city || ''}, ${(linkedInData.location as any).country || ''}`.replace(/^, |, $/g, '')
+                                                            : linkedInData.location;
+
+                                                        const newProfileData = {
+                                                            name: linkedInData.name || formData.name,
+                                                            title: linkedInData.headline || formData.title,
+                                                            location: locationString || formData.location,
+                                                            bio: linkedInData.summary || linkedInData.about || formData.bio,
+                                                        };
+
+                                                        // Update the form state
+                                                        setFormData(prev => ({
+                                                            ...prev,
+                                                            ...newProfileData
+                                                        }));
+
+                                                        // Also save the data to the backend
+                                                        await updateProfile(newProfileData);
+
+                                                        setUpdateMessage({ text: 'Profile data synced and saved from LinkedIn!', type: 'success' });
+                                                        setActiveTab('profile'); // Switch to profile tab to see changes
+                                                    } catch (error) {
+                                                        console.error('Failed to sync with LinkedIn:', error);
+                                                        setUpdateMessage({ text: 'Failed to sync with LinkedIn. Please check your URL and try again.', type: 'error' });
+                                                    } finally {
+                                                        setIsLoading(false);
+                                                    }
+                                                }}
+                                                className="mt-2 ml-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
+                                            >
+                                                Sync Profile from LinkedIn
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         )}
-
-                        {/* Appearance tab removed */}
 
                         {/* Account Settings Tab */}
                         {activeTab === 'account' && (

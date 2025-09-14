@@ -4,10 +4,15 @@ const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
 
-// Configure multer storage
-const storage = multer.diskStorage({
+// --- Image Upload Config ---
+// Configure multer storage for profile images
+const imageStorage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, path.join(__dirname, '../uploads/profiles'));
+        const dir = path.join(__dirname, '../uploads/profiles');
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        cb(null, dir);
     },
     filename: (req, file, cb) => {
         // Create unique filename with user ID and timestamp
@@ -18,7 +23,7 @@ const storage = multer.diskStorage({
 });
 
 // Filter files to accept only images
-const fileFilter = (req, file, cb) => {
+const imageFileFilter = (req, file, cb) => {
     if (file.mimetype.startsWith('image/')) {
         cb(null, true);
     } else {
@@ -26,12 +31,48 @@ const fileFilter = (req, file, cb) => {
     }
 };
 
-// Initialize multer upload
-exports.upload = multer({
-    storage: storage,
-    fileFilter: fileFilter,
+// Initialize multer upload for images
+exports.uploadImage = multer({
+    storage: imageStorage,
+    fileFilter: imageFileFilter,
     limits: {
         fileSize: 5 * 1024 * 1024 // 5MB limit
+    }
+});
+
+// --- CV Upload Config ---
+// Configure multer storage for CVs
+const cvStorage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        const dir = path.join(__dirname, '../uploads/cvs');
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        cb(null, dir);
+    },
+    filename: (req, file, cb) => {
+        // Create unique filename with user ID and timestamp
+        const uniqueSuffix = `${req.user._id}-${Date.now()}`;
+        const extension = path.extname(file.originalname);
+        cb(null, `cv-${uniqueSuffix}${extension}`);
+    }
+});
+
+// Filter files to accept only PDF and DOCX
+const cvFileFilter = (req, file, cb) => {
+    if (file.mimetype === 'application/pdf' || file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        cb(null, true);
+    } else {
+        cb(new Error('Invalid file type! Please upload a PDF or DOCX file.'), false);
+    }
+};
+
+// Initialize multer upload for CVs
+exports.uploadCVFile = multer({
+    storage: cvStorage,
+    fileFilter: cvFileFilter,
+    limits: {
+        fileSize: 10 * 1024 * 1024 // 10MB limit
     }
 });
 
@@ -240,7 +281,7 @@ exports.uploadProfileImage = async (req, res) => {
 
         // Update profile with new image URL
         // Match express static mount at app.use('/uploads', ...)
-        const imageUrl = `/uploads/profiles/${req.file.filename}`;
+        const imageUrl = `${req.protocol}://${req.get('host')}/uploads/profiles/${req.file.filename}`;
 
         profile.profileImageUrl = imageUrl;
         await profile.save();
@@ -281,17 +322,12 @@ exports.uploadCV = async (req, res) => {
             });
         }
 
-        // Delete old CV if exists
-        if (profile.cvFileUrl) {
-            const oldFilePath = path.join(__dirname, '..', profile.cvFileUrl.replace('/api', ''));
+        // With GridFS, old files can be removed by ID if needed, but for simplicity,
+        // we'll just add the new one and update the reference.
+        // A cleanup script could periodically remove unreferenced files.
 
-            if (fs.existsSync(oldFilePath)) {
-                fs.unlinkSync(oldFilePath);
-            }
-        }
-
-        // Update profile with new CV URL
-        const cvFileUrl = `/uploads/cvs/${req.file.filename}`;
+        // Construct absolute URL for the CV
+        const cvFileUrl = `${req.protocol}://${req.get('host')}/uploads/cvs/${req.file.filename}`;
 
         profile.cvFileUrl = cvFileUrl;
         profile.cvViewUrl = cvFileUrl; // Set view URL to same as file URL

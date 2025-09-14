@@ -7,9 +7,10 @@ interface HeaderProps {
     setLanguage: (language: string) => void;
     onShare?: () => void;
     isViewMode?: boolean;
+    cvUrl?: string;
 }
 
-const Header: React.FC<HeaderProps> = ({ language = 'en', setLanguage = () => { }, onShare, isViewMode = false }) => {
+const Header: React.FC<HeaderProps> = ({ language = 'en', setLanguage = () => { }, onShare, isViewMode = false, cvUrl }) => {
     const handleLogout = () => {
         authAPI.logout();
         window.location.href = '/login'; // Redirect to login page
@@ -38,7 +39,9 @@ const Header: React.FC<HeaderProps> = ({ language = 'en', setLanguage = () => { 
                     <ul className="flex gap-8">
                         <li><a href="#about" className="text-gray-400 hover:text-blue-400 transition-colors">{translations[langKey].nav.about}</a></li>
                         <li><a href="#projects" className="text-gray-400 hover:text-blue-400 transition-colors">{translations[langKey].nav.projects}</a></li>
-                        <li><a href="#cv" className="text-gray-400 hover:text-blue-400 transition-colors">{translations[langKey].nav.cv}</a></li>
+                        {cvUrl && (
+                            <li><a href={cvUrl} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-400 transition-colors">{translations[langKey].nav.cv}</a></li>
+                        )}
                         <li><a href="#contact" className="text-gray-400 hover:text-blue-400 transition-colors">{translations[langKey].nav.contact}</a></li>
                     </ul>
                     <div className="flex items-center gap-3">

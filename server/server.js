@@ -71,6 +71,7 @@ app.get('/api/health', (req, res) => {
 const authRoutes = require('./routes/auth.routes');
 const profileRoutes = require('./routes/profile.routes');
 const projectRoutes = require('./routes/project.routes');
+const filesRoutes = require('./routes/files.routes');
 // const adminRoutes = require('./routes/admin.routes');
 // const filesRoutes = require('./routes/files');
 
@@ -79,6 +80,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/profile', profileRoutes);
 app.use('/api/profiles', profileRoutes); // Add alias for plural form
 app.use('/api/projects', projectRoutes);
+app.use('/api/files', filesRoutes);
 // app.use('/api/admin', adminRoutes);
 // app.use('/api/files', filesRoutes);
 

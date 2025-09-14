@@ -615,11 +615,12 @@ export const extractBioFromLinkedIn = async (profileData: LinkedInProfileData): 
         }
 
         // Add location if available and not already mentioned
-        if (profileData.location && !englishBio.includes(profileData.location)) {
-            englishBio += `\n\nBased in ${profileData.location}.`;
+        const locationString = formatLocation(profileData.location);
+        if (locationString && !englishBio.includes(locationString)) {
+            englishBio += `\n\nBased in ${locationString}.`;
         }
 
-        // Add education if available and not already mentioned
+        // Add education if available
         if (profileData.education && profileData.education.length > 0) {
             const edu = profileData.education[0];
             const educationInfo = `${edu.degree || ''} from ${edu.school || ''}`.trim();
@@ -723,7 +724,8 @@ export const extractBioFromLinkedInCombined = async (profileData: LinkedInProfil
         let enhancedBio = englishBio;
 
         // Add location if available
-        const location = additionalData.geoLocationName || profileData.location;
+        const locationObj = additionalData.geoLocationName || profileData.location;
+        const location = formatLocation(locationObj);
         if (location && !enhancedBio.includes(location)) {
             enhancedBio += `\n\nBased in ${location}.`;
         }
@@ -1186,4 +1188,17 @@ export const setCachedLinkedInCompany = (domain: string, companyData: any): void
     } catch (error) {
         console.error(`Error setting LinkedIn company cache for ${domain}:`, error);
     }
+};
+
+const formatLocation = (location: any): string => {
+    if (typeof location === 'string') {
+        return location;
+    }
+    if (typeof location === 'object' && location !== null) {
+        const city = location.city || '';
+        const country = location.country || '';
+        // Return formatted string, cleaning up any leading/trailing commas if one part is missing
+        return `${city}, ${country}`.replace(/^, |, $/g, '');
+    }
+    return '';
 };

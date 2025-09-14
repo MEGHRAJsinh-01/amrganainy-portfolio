@@ -204,3 +204,33 @@ export interface AuthResponse {
     token: string;
     user: User;
 }
+
+export interface IProfile {
+    id: string;
+    userId: string;
+    name: string;
+    title: string;
+    bio: string;
+    about: string;
+    contactEmail: string;
+    phone?: string;
+    location?: string;
+    skills: string[];
+    socialLinks: {
+        github?: string;
+        linkedin?: string;
+        twitter?: string;
+        website?: string;
+        [key: string]: string | undefined;
+    };
+    profileImage?: string;
+    profileImageUrl?: string;
+    cvFile?: string;
+    cvFileUrl?: string;
+    cvViewUrl?: string;
+    cvDownloadUrl?: string;
+    languages?: string[];
+    theme?: string;
+    isPublic: boolean;
+    customDomain?: string;
+}

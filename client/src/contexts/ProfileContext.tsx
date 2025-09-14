@@ -1,45 +1,16 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { profileAPI } from '../api/multiUserApi';
 import { useAuth } from './AuthContext';
 
-interface ProfileData {
-    id: string;
-    userId: string;
-    name: string;
-    title: string;
-    bio: string;
-    about: string;
-    contactEmail: string;
-    phone?: string;
-    location?: string;
-    skills: string[];
-    socialLinks: {
-        github?: string;
-        linkedin?: string;
-        twitter?: string;
-        website?: string;
-        [key: string]: string | undefined;
-    };
-    // Backward compatibility fields
-    profileImage?: string;
-    cvFile?: string;
-    // New schema fields
-    profileImageUrl?: string;
-    cvFileUrl?: string;
-    cvViewUrl?: string;
-    cvDownloadUrl?: string;
-    languages?: string[];
-    theme?: string;
-    isPublic: boolean;
-    customDomain?: string;
-}
+import { IProfile } from '../types';
 
 interface ProfileContextType {
-    profile: ProfileData | null;
+    profile: IProfile | null;
     loading: boolean;
     error: string | null;
-    getProfile: (username?: string) => Promise<ProfileData | null>;
-    updateProfile: (profileData: Partial<ProfileData>) => Promise<void>;
+    getProfile: (username?: string) => Promise<IProfile | null>;
+    getProfileByUsername: (username: string) => Promise<{ profile: IProfile, user: any } | null>;
+    updateProfile: (profileData: Partial<IProfile>) => Promise<void>;
     uploadProfileImage: (file: File) => Promise<string>;
     uploadCV: (file: File) => Promise<string>;
     clearProfileError: () => void;
@@ -49,7 +20,7 @@ const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
 
 export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user } = useAuth();
-    const [profile, setProfile] = useState<ProfileData | null>(null);
+    const [profile, setProfile] = useState<IProfile | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -62,7 +33,26 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     }, [user]);
 
-    const getProfile = async (username?: string) => {
+    const getProfileByUsername = useCallback(async (username: string) => {
+        try {
+            setLoading(true);
+            setError(null);
+            const response = await profileAPI.getProfileByUsername(username);
+            const profileData = response?.data?.data;
+            if (profileData) {
+                setProfile(profileData.profile);
+            }
+            return profileData;
+        } catch (err: any) {
+            setError(err.response?.data?.message || `Failed to load profile for ${username}`);
+            return null;
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+
+    const getProfile = useCallback(async (username?: string) => {
         try {
             setLoading(true);
             setError(null);
@@ -149,9 +139,9 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } finally {
             setLoading(false);
         }
-    };
+    }, [user]);
 
-    const updateProfile = async (profileData: Partial<ProfileData>) => {
+    const updateProfile = useCallback(async (profileData: Partial<IProfile>) => {
         try {
             setLoading(true);
             setError(null);
@@ -218,9 +208,9 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
-    const uploadProfileImage = async (file: File) => {
+    const uploadProfileImage = useCallback(async (file: File) => {
         try {
             setLoading(true);
             setError(null);
@@ -235,9 +225,9 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
-    const uploadCV = async (file: File) => {
+    const uploadCV = useCallback(async (file: File) => {
         try {
             setLoading(true);
             setError(null);
@@ -252,7 +242,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
 
     const clearProfileError = () => setError(null);
 
@@ -263,6 +253,7 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 loading,
                 error,
                 getProfile,
+                getProfileByUsername,
                 updateProfile,
                 uploadProfileImage,
                 uploadCV,
