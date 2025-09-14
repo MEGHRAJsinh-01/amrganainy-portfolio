@@ -16,7 +16,8 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, language, onVideoCli
         e.stopPropagation(); // Prevent triggering project click
         if (videoUrl && onVideoClick) {
             e.preventDefault();
-            onVideoClick(videoUrl, title);
+            const titleObject = typeof title === 'string' ? { en: title, de: title } : title;
+            onVideoClick(videoUrl, titleObject);
         }
     };
 
@@ -77,7 +78,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, language, onVideoCli
     };
 
     const primaryLanguage = getPrimaryLanguage(tags);
-    const displayImage = imageUrl || languageLogos[primaryLanguage?.toLowerCase()] || 'https://via.placeholder.com/400x225/374151/9CA3AF?text=No+Image';
+    const displayImage = imageUrl || languageLogos[primaryLanguage?.toLowerCase()] || 'https://placehold.co/400x225/374151/9CA3AF?text=No+Image';
 
     return (
         <div
@@ -87,11 +88,11 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, language, onVideoCli
             <div className="w-full bg-center bg-no-repeat aspect-video bg-cover rounded-md flex items-center justify-center overflow-hidden" style={{ backgroundImage: imageUrl ? `url("${imageUrl}")` : 'none', backgroundColor: imageUrl ? 'transparent' : '#374151' }}>
                 {!imageUrl && (
                     <img
-                        src={languageLogos[primaryLanguage?.toLowerCase()] || 'https://via.placeholder.com/400x225/374151/9CA3AF?text=No+Image'}
+                        src={languageLogos[primaryLanguage?.toLowerCase()] || 'https://placehold.co/400x225/374151/9CA3AF?text=No+Image'}
                         alt={`${primaryLanguage} logo`}
                         className="w-24 h-24 object-contain opacity-60"
                         onError={(e) => {
-                            e.currentTarget.src = 'https://via.placeholder.com/400x225/374151/9CA3AF?text=No+Image';
+                            e.currentTarget.src = 'https://placehold.co/400x225/374151/9CA3AF?text=No+Image';
                         }}
                     />
                 )}

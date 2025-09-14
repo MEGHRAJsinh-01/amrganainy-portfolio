@@ -1,17 +1,8 @@
-/**
- * Translation service using Lingva Translate API (JavaScript version for testing)
- * This is a free, open-source, privacy-focused translation API
- * It works as a proxy for Google Translate with no API key required
- */
-
-// Lingva Translate API base URL
-const LINGVA_API_BASE = 'https://lingva.ml/api/v1';
-
-// Cache translations to reduce API calls
-const translationCache = {};
+import { portfolioAPI } from './api';
 
 /**
- * Translate text from one language to another using Lingva Translate API
+ * Translate text by calling the backend translation service.
+ * The backend will handle caching in the database.
  * @param {string} text - Text to translate
  * @param {string} source - Source language code (e.g., "en")
  * @param {string} target - Target language code (e.g., "de")
@@ -27,39 +18,12 @@ export const translateText = async (
         return text;
     }
 
-    // Return from cache if available
-    const cacheKey = `${source}_${target}`;
-    if (translationCache[cacheKey] && translationCache[cacheKey][text]) {
-        console.log('Using cached translation for:', text.substring(0, 30) + '...');
-        return translationCache[cacheKey][text];
-    }
-
     try {
-        // URL encode the text for the API request
-        const encodedText = encodeURIComponent(text);
-
-        // Call Lingva Translate API
-        console.log(`Translating from ${source} to ${target}:`, text.substring(0, 30) + '...');
-
-        const response = await fetch(`${LINGVA_API_BASE}/${source}/${target}/${encodedText}`);
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            console.error('Translation API error:', errorData);
-            throw new Error(`Translation failed: ${response.status} ${response.statusText}`);
-        }
-
-        const data = await response.json();
-
-        // Store in cache
-        if (!translationCache[cacheKey]) {
-            translationCache[cacheKey] = {};
-        }
-        translationCache[cacheKey][text] = data.translation;
-
-        return data.translation;
+        console.log(`Requesting translation from ${source} to ${target} for:`, text.substring(0, 30) + '...');
+        const response = await portfolioAPI.translate(text, source, target);
+        return response.translation;
     } catch (error) {
-        console.error('Error translating text:', error);
+        console.error('Error translating text via backend:', error);
         // Return original text if translation fails
         return text;
     }

@@ -319,6 +319,26 @@ export const portfolioAPI = {
             console.error('Error deleting profile image:', error);
             throw error;
         }
+    },
+
+    translate: async (text: string, source: string, target: string) => {
+        try {
+            const response = await fetch(`${API_URL}/translate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, source, target }),
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Translation failed');
+            }
+
+            return await response.json();
+        } catch (error) {
+            console.error('Error translating text:', error);
+            throw error;
+        }
     }
 };
 
