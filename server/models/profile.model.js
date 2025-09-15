@@ -20,8 +20,23 @@ const profileSchema = new mongoose.Schema({
         type: String
     },
     skills: [{
-        type: String,
-        trim: true
+        name: { type: String, trim: true },
+        source: { type: String, enum: ['github', 'linkedin', 'custom'], default: 'custom' },
+        isVisible: { type: Boolean, default: true }
+    }],
+    languages: [{
+        label: { type: String, trim: true },
+        source: { type: String, enum: ['linkedin', 'custom'], default: 'custom' },
+        isVisible: { type: Boolean, default: true }
+    }],
+    experience: [{
+        title: { type: String, trim: true },
+        company: { type: String, trim: true },
+        description: { type: String, trim: true },
+        startDate: { type: String, trim: true },
+        endDate: { type: String, trim: true },
+        source: { type: String, enum: ['linkedin', 'custom'], default: 'custom' },
+        isVisible: { type: Boolean, default: true }
     }],
     location: {
         type: String,

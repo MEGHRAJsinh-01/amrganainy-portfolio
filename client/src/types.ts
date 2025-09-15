@@ -205,6 +205,28 @@ export interface AuthResponse {
     user: User;
 }
 
+export interface Skill {
+    name: string;
+    source: 'github' | 'linkedin' | 'custom';
+    isVisible: boolean;
+}
+
+export interface Language {
+    label: string;
+    source: 'linkedin' | 'custom';
+    isVisible: boolean;
+}
+
+export interface Experience {
+    title: string;
+    company: string;
+    description: string;
+    startDate: string;
+    endDate: string;
+    source: 'linkedin' | 'custom';
+    isVisible: boolean;
+}
+
 export interface IProfile {
     id: string;
     userId: string;
@@ -215,7 +237,9 @@ export interface IProfile {
     contactEmail: string;
     phone?: string;
     location?: string;
-    skills: string[];
+    skills: Skill[];
+    languages?: Language[];
+    experience?: Experience[];
     socialLinks: {
         github?: string;
         linkedin?: string;
@@ -229,7 +253,6 @@ export interface IProfile {
     cvFileUrl?: string;
     cvViewUrl?: string;
     cvDownloadUrl?: string;
-    languages?: string[];
     theme?: string;
     isPublic: boolean;
     customDomain?: string;

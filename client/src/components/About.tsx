@@ -9,7 +9,7 @@ import {
     getCachedLinkedInProfile,
     fetchLinkedInProfile
 } from '../githubService';
-import { LinkedInEducation, LinkedInExperience } from '../types';
+import { LinkedInEducation, LinkedInExperience, IProfile } from '../types';
 import { LinkedInProfileData, Portfolio } from '../types';
 import ReactMarkdown from 'react-markdown';
 import DynamicText from './DynamicText';
@@ -19,6 +19,7 @@ interface AboutProps {
     language: string;
     isEditMode?: boolean;
     onProfileUpdate?: (data: any) => void;
+    profile?: IProfile;
 }
 
 // Interface for language proficiency data
@@ -65,7 +66,7 @@ const ensureFullImageUrl = (url: string | undefined): string => {
     return `${origin}/${url.replace(/^\/+/, '')}`;
 };
 
-const About: React.FC<AboutProps> = ({ language, isEditMode = false, onProfileUpdate }) => {
+const About: React.FC<AboutProps> = ({ language, isEditMode = false, onProfileUpdate, profile }) => {
     const [skills, setSkills] = useState<SkillsData>({
         programmingLanguages: [],
         otherSkills: []
@@ -76,7 +77,7 @@ const About: React.FC<AboutProps> = ({ language, isEditMode = false, onProfileUp
     const [experienceData, setExperienceData] = useState<LinkedInExperience[]>([]);
     const [languages, setLanguages] = useState<LanguageProficiency[]>([]);
     const [portfolioData, setPortfolioData] = useState<Portfolio | null>(null);
-    const [isLoading, setIsLoading] = useState<boolean>(false);
+    const [isLoading, setIsLoading] = useState<boolean>(true);
     const [isLoadingPortfolio, setIsLoadingPortfolio] = useState<boolean>(false);
     const [bioError, setBioError] = useState<string | null>(null);
     const [portfolioError, setPortfolioError] = useState<string | null>(null);
@@ -93,6 +94,34 @@ const About: React.FC<AboutProps> = ({ language, isEditMode = false, onProfileUp
         const loadData = async () => {
             setIsLoading(true);
             try {
+                // If a profile is passed, use its data directly
+                if (profile) {
+                    setPortfolioData({
+                        personalInfo: {
+                            name: profile.name,
+                            title: profile.title,
+                            bio: profile.bio,
+                        },
+                        profileImage: profile.profileImageUrl,
+                        cvViewUrl: profile.cvViewUrl,
+                    });
+                    setBio({ en: profile.bio || '', de: '' }); // Assuming bio is in 'en'
+
+                    // Handle skills from profile
+                    if (profile.skills && profile.skills.length > 0) {
+                        // Simple split for demonstration. Could be improved.
+                        // For now, let's assume all skills from DB are "other skills"
+                        setSkills({ programmingLanguages: [], otherSkills: profile.skills });
+                    } else {
+                        // Fallback to GitHub if no skills are in the profile
+                        const dynamicSkills = await getDynamicSkills();
+                        setSkills(dynamicSkills);
+                    }
+
+                    setIsLoading(false);
+                    return; // Skip the rest of the fetching logic
+                }
+
                 // Load skills
                 const dynamicSkills = await getDynamicSkills();
                 setSkills(dynamicSkills);
@@ -101,28 +130,28 @@ const About: React.FC<AboutProps> = ({ language, isEditMode = false, onProfileUp
                 // Load profile data from LinkedIn
                 try {
                     // Try to get cached LinkedIn profile first
-                    let profile = getCachedLinkedInProfile();
+                    let linkedInProfileData = getCachedLinkedInProfile();
 
                     // If no cached profile, fetch from LinkedIn
-                    if (!profile) {
-                        profile = await fetchLinkedInProfile();
+                    if (!linkedInProfileData) {
+                        linkedInProfileData = await fetchLinkedInProfile();
                     }
 
                     // Set the LinkedIn profile
-                    if (profile) {
-                        setLinkedInProfile(profile);
-                        console.log("LinkedIn profile data:", profile);
+                    if (linkedInProfileData) {
+                        setLinkedInProfile(linkedInProfileData);
+                        console.log("LinkedIn profile data:", linkedInProfileData);
 
                         // Set education data if available
-                        if (profile.education && profile.education.length > 0) {
-                            setEducationData(profile.education);
-                            console.log("LinkedIn education data:", profile.education);
+                        if (linkedInProfileData.education && linkedInProfileData.education.length > 0) {
+                            setEducationData(linkedInProfileData.education);
+                            console.log("LinkedIn education data:", linkedInProfileData.education);
                         }
 
                         // Set experience data if available
-                        if (profile.experiences && profile.experiences.length > 0) {
-                            setExperienceData(profile.experiences);
-                            console.log("LinkedIn experience data:", profile.experiences);
+                        if (linkedInProfileData.experiences && linkedInProfileData.experiences.length > 0) {
+                            setExperienceData(linkedInProfileData.experiences);
+                            console.log("LinkedIn experience data:", linkedInProfileData.experiences);
                         }
                     }
 
@@ -132,8 +161,8 @@ const About: React.FC<AboutProps> = ({ language, isEditMode = false, onProfileUp
                     setBioError(null); // Clear any previous errors
 
                     // Extract education data
-                    if (profile?.education && profile.education.length > 0) {
-                        setEducationData(profile.education);
+                    if (linkedInProfileData?.education && linkedInProfileData.education.length > 0) {
+                        setEducationData(linkedInProfileData.education);
                     }
 
                     // Now that we have LinkedIn data, load portfolio data
@@ -141,9 +170,9 @@ const About: React.FC<AboutProps> = ({ language, isEditMode = false, onProfileUp
                     await loadPortfolioData();
 
                     // Extract languages from skills
-                    if (profile?.languages && profile.languages.length > 0) {
+                    if (linkedInProfileData?.languages && linkedInProfileData.languages.length > 0) {
                         // Use languages directly from the LinkedIn profile
-                        const languageData = profile.languages.map(lang => {
+                        const languageData = linkedInProfileData.languages.map(lang => {
                             return {
                                 code: lang.code || lang.language?.substring(0, 2).toUpperCase() || '',
                                 name: lang.name || lang.language || '',
@@ -156,7 +185,7 @@ const About: React.FC<AboutProps> = ({ language, isEditMode = false, onProfileUp
                         console.log("LinkedIn languages data:", languageData);
                     }
                     // Fallback: try to extract languages from skills if no languages array is present
-                    else if (profile?.skills && profile.skills.length > 0) {
+                    else if (linkedInProfileData?.skills && linkedInProfileData.skills.length > 0) {
                         // Find language skills (like German, English, etc.)
                         const languageSkills: LanguageProficiency[] = [];
 
@@ -164,7 +193,7 @@ const About: React.FC<AboutProps> = ({ language, isEditMode = false, onProfileUp
                         const languageKeywords = ['german', 'english', 'french', 'spanish', 'arabic', 'chinese'];
                         const languageLevels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
-                        profile.skills.forEach(skill => {
+                        linkedInProfileData.skills.forEach(skill => {
                             const skillName = typeof skill === 'string' ? skill : skill.name || '';
                             const skillNameLower = skillName.toLowerCase();
 
@@ -260,7 +289,7 @@ const About: React.FC<AboutProps> = ({ language, isEditMode = false, onProfileUp
         };
 
         loadData();
-    }, []);
+    }, [profile]);
 
     // Initialize edit state when data loads or edit mode changes
     useEffect(() => {

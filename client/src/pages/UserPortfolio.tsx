@@ -74,7 +74,7 @@ const UserPortfolio: React.FC = () => {
             />
 
             <main>
-                <About language={language} />
+                <About language={language} profile={userProfile} />
 
                 <Projects language={language} username={username} />
 

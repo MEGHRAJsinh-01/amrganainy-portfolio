@@ -30,6 +30,8 @@ const UserDashboard: React.FC = () => {
         return url;
     };
     const [activeTab, setActiveTab] = useState('profile');
+    // Add new tabs for skills, languages, experience
+    const [activeSection, setActiveSection] = useState('profile');
     const [allRepos, setAllRepos] = useState<GitHubRepo[]>([]);
     const [visibilitySettings, setVisibilitySettings] = useState<{ [key: string]: boolean }>({});
     const [isLoading, setIsLoading] = useState(false);
@@ -50,7 +52,13 @@ const UserDashboard: React.FC = () => {
         githubUrl: '',
         linkedinUrl: '',
         twitterUrl: '',
-        websiteUrl: ''
+        websiteUrl: '',
+        skills: [] as { name: string; source: string; isVisible: boolean }[],
+        languages: [] as string[],
+        experience: [] as { title: string; company: string; description: string; startDate: string; endDate: string }[],
+        editingLanguage: undefined as string | undefined,
+        editingSkill: undefined as string | undefined,
+        editingExperience: undefined as number | undefined
     });
 
     // Get auth, profile, and project context
@@ -102,11 +110,16 @@ const UserDashboard: React.FC = () => {
                 location: profile?.location || '',
                 contactEmail: profile?.contactEmail || '',
                 bio: (profile as any)?.bio || profile?.about || '',
-                // Single source of truth: always use profile.socialLinks
                 githubUrl: profile?.socialLinks?.github || '',
                 linkedinUrl: profile?.socialLinks?.linkedin || '',
                 twitterUrl: profile?.socialLinks?.twitter || '',
-                websiteUrl: profile?.socialLinks?.website || ''
+                websiteUrl: profile?.socialLinks?.website || '',
+                skills: profile?.skills || [],
+                languages: profile?.languages || [],
+                experience: profile?.experience || [],
+                editingLanguage: undefined,
+                editingSkill: undefined,
+                editingExperience: undefined
             });
         }
     }, [profile, user]);
@@ -296,7 +309,9 @@ const UserDashboard: React.FC = () => {
                 githubUrl: newProject.githubUrl || undefined,
                 liveUrl: newProject.liveUrl || undefined,
                 isPublic: newProject.isPublic,
-                order: projects.length // Add at the end
+                order: projects.length, // Add at the end
+                isImported: false,
+                isVisibleInPortfolio: newProject.isPublic
             });
 
             // Upload image if available
@@ -355,9 +370,11 @@ const UserDashboard: React.FC = () => {
                 contactEmail: formData.contactEmail,
                 // Server schema uses `bio`; keep compatibility mapping on server too
                 bio: formData.bio,
-                socialLinks
+                socialLinks,
+                skills: formData.skills,
+                languages: formData.languages,
+                experience: formData.experience
             };
-
             await updateProfile(profileData);
 
             setUpdateMessage({
@@ -484,11 +501,32 @@ const UserDashboard: React.FC = () => {
 
                         <nav className="space-y-1">
                             <button
-                                onClick={() => setActiveTab('profile')}
-                                className={`w-full text-left px-4 py-2 rounded-md transition-colors ${activeTab === 'profile' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700'
+                                onClick={() => setActiveSection('profile')}
+                                className={`w-full text-left px-4 py-2 rounded-md transition-colors ${activeSection === 'profile' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700'
                                     }`}
                             >
                                 Profile Settings
+                            </button>
+                            <button
+                                onClick={() => setActiveSection('skills')}
+                                className={`w-full text-left px-4 py-2 rounded-md transition-colors ${activeSection === 'skills' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700'
+                                    }`}
+                            >
+                                Skills
+                            </button>
+                            <button
+                                onClick={() => setActiveSection('languages')}
+                                className={`w-full text-left px-4 py-2 rounded-md transition-colors ${activeSection === 'languages' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700'
+                                    }`}
+                            >
+                                Languages
+                            </button>
+                            <button
+                                onClick={() => setActiveSection('experience')}
+                                className={`w-full text-left px-4 py-2 rounded-md transition-colors ${activeSection === 'experience' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-700'
+                                    }`}
+                            >
+                                Work Experience
                             </button>
                             <button
                                 onClick={() => setActiveTab('projects')}
@@ -559,19 +597,9 @@ const UserDashboard: React.FC = () => {
 
                     {/* Main Content Area */}
                     <div className="flex-1">
-
-                        {(profileLoading || projectsLoading || isLoading) && (
-                            <div className="bg-gray-800 rounded-lg p-6 mb-6 flex justify-center">
-                                <div className="flex items-center space-x-2">
-                                    <div className="w-6 h-6 border-t-2 border-b-2 border-blue-500 rounded-full animate-spin"></div>
-                                    <span>Loading...</span>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Profile Settings Tab */}
-                        {activeTab === 'profile' && !profileLoading && (
-                            <div className="bg-gray-800 rounded-lg p-6">
+                        {/* Only show the active section */}
+                        {activeSection === 'profile' && (
+                            <div className="bg-gray-800 rounded-lg p-6 mb-8">
                                 <h2 className="text-xl font-semibold mb-6">Profile Settings</h2>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -640,6 +668,34 @@ const UserDashboard: React.FC = () => {
 
                                         <div className="mb-4">
                                             <label className="block text-gray-300 text-sm font-medium mb-2">
+                                                GitHub URL
+                                            </label>
+                                            <input
+                                                type="url"
+                                                name="githubUrl"
+                                                value={formData.githubUrl}
+                                                onChange={handleInputChange}
+                                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:border-blue-500 focus:ring-blue-500"
+                                                placeholder="https://github.com/yourusername"
+                                            />
+                                        </div>
+
+                                        <div className="mb-4">
+                                            <label className="block text-gray-300 text-sm font-medium mb-2">
+                                                LinkedIn URL
+                                            </label>
+                                            <input
+                                                type="url"
+                                                name="linkedinUrl"
+                                                value={formData.linkedinUrl}
+                                                onChange={handleInputChange}
+                                                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:border-blue-500 focus:ring-blue-500"
+                                                placeholder="https://linkedin.com/in/yourusername"
+                                            />
+                                        </div>
+
+                                        <div className="mb-4">
+                                            <label className="block text-gray-300 text-sm font-medium mb-2">
                                                 Twitter URL
                                             </label>
                                             <input
@@ -650,43 +706,6 @@ const UserDashboard: React.FC = () => {
                                                 className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white focus:border-blue-500 focus:ring-blue-500"
                                                 placeholder="https://twitter.com/yourusername"
                                             />
-                                        </div>
-
-                                        <div className="mb-4">
-                                            <label className="block text-gray-300 text-sm font-medium mb-2">
-                                                Profile Image
-                                            </label>
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-700">
-                                                    {(() => {
-                                                        const rawAvatar = (profile as any)?.profileImageUrl || profile?.profileImage;
-                                                        const avatarUrl = resolveAssetUrl(rawAvatar) || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile?.name || user?.username || 'User')}&background=1e293b&color=fff&size=96`;
-                                                        return (
-                                                            <img
-                                                                src={avatarUrl}
-                                                                alt="Profile"
-                                                                className="w-full h-full object-cover"
-                                                            />
-                                                        );
-                                                    })()}
-                                                </div>
-                                                <label className="flex-1 flex justify-center px-4 py-2 border-2 border-gray-600 border-dashed rounded-md cursor-pointer hover:border-blue-500 transition-colors">
-                                                    <div className="space-y-1 text-center">
-                                                        <div className="flex text-sm text-gray-400">
-                                                            <span>Upload a file</span>
-                                                        </div>
-                                                        <p className="text-xs text-gray-500">
-                                                            PNG, JPG, GIF up to 5MB
-                                                        </p>
-                                                    </div>
-                                                    <input
-                                                        type="file"
-                                                        accept="image/*"
-                                                        className="sr-only"
-                                                        onChange={handleProfileImageUpload}
-                                                    />
-                                                </label>
-                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -716,10 +735,255 @@ const UserDashboard: React.FC = () => {
                                 </div>
                             </div>
                         )}
-
+                        {activeSection === 'skills' && (
+                            <div className="bg-gray-800 rounded-lg p-6 mb-8">
+                                <h2 className="text-xl font-semibold mb-6">Skills</h2>
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    {formData.skills.map((skillObj, index) => (
+                                        <div key={index} className="flex items-center bg-gray-600 px-2 py-1 rounded-md">
+                                            {skillObj.name === (formData.editingSkill ?? '') ? (
+                                                <input
+                                                    type="text"
+                                                    defaultValue={skillObj.name}
+                                                    className="bg-gray-700 text-white px-2 py-1 rounded"
+                                                    onBlur={e => {
+                                                        const newSkill = e.target.value.trim();
+                                                        if (newSkill) {
+                                                            const newSkills = [...formData.skills];
+                                                            newSkills[index] = { ...skillObj, name: newSkill };
+                                                            setFormData(prev => ({ ...prev, skills: newSkills, editingSkill: undefined }));
+                                                        } else {
+                                                            setFormData(prev => ({ ...prev, editingSkill: undefined }));
+                                                        }
+                                                    }}
+                                                    autoFocus
+                                                />
+                                            ) : (
+                                                <>
+                                                    <span className="text-sm">{skillObj.name}</span>
+                                                    <button
+                                                        onClick={() => setFormData(prev => ({ ...prev, editingSkill: skillObj.name }))
+                                                        }
+                                                        className="ml-2 text-blue-400 hover:text-white"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            const newSkills = [...formData.skills];
+                                                            newSkills.splice(index, 1);
+                                                            setFormData(prev => ({ ...prev, skills: newSkills }));
+                                                        }}
+                                                        className="ml-2 text-gray-400 hover:text-white"
+                                                    >
+                                                        &times;
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex mt-2">
+                                    <input
+                                        type="text"
+                                        id="new-skill-input"
+                                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-l-md text-white focus:border-blue-500 focus:ring-blue-500"
+                                        placeholder="Add a new skill"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                const newSkill = (e.target as HTMLInputElement).value.trim();
+                                                if (newSkill && !formData.skills.some(s => s.name === newSkill)) {
+                                                    setFormData(prev => ({ ...prev, skills: [...prev.skills, { name: newSkill, source: 'custom' as 'custom', isVisible: true }] }));
+                                                    (e.target as HTMLInputElement).value = '';
+                                                }
+                                            }
+                                        }}
+                                    />
+                                    <button
+                                        onClick={() => {
+                                            const input = document.getElementById('new-skill-input') as HTMLInputElement;
+                                            const newSkill = input.value.trim();
+                                            if (newSkill && !formData.skills.some(s => s.name === newSkill)) {
+                                                setFormData(prev => ({ ...prev, skills: [...prev.skills, { name: newSkill, source: 'custom' as 'custom', isVisible: true }] }));
+                                                input.value = '';
+                                            }
+                                        }}
+                                        className="bg-blue-600 text-white px-4 py-2 rounded-r-md hover:bg-blue-700"
+                                    >
+                                        Add
+                                    </button>
+                                </div>
+                                <div className="mt-6">
+                                    <button
+                                        onClick={handleUpdateProfile}
+                                        className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 transition-colors"
+                                    >
+                                        Save Changes
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        {activeSection === 'languages' && (
+                            <div className="bg-gray-800 rounded-lg p-6 mb-8">
+                                <h2 className="text-xl font-semibold mb-6">Languages</h2>
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    {formData.languages.map((lang, index) => (
+                                        <div key={index} className="flex items-center bg-gray-600 px-2 py-1 rounded-md">
+                                            {lang === (formData.editingLanguage ?? '') ? (
+                                                <input
+                                                    type="text"
+                                                    defaultValue={lang}
+                                                    className="bg-gray-700 text-white px-2 py-1 rounded"
+                                                    onBlur={e => {
+                                                        const newLang = e.target.value.trim();
+                                                        if (newLang) {
+                                                            const newLangs = [...formData.languages];
+                                                            newLangs[index] = newLang;
+                                                            setFormData(prev => ({ ...prev, languages: newLangs, editingLanguage: undefined }));
+                                                        } else {
+                                                            setFormData(prev => ({ ...prev, editingLanguage: undefined }));
+                                                        }
+                                                    }}
+                                                    autoFocus
+                                                />
+                                            ) : (
+                                                <>
+                                                    <span className="text-sm">{lang}</span>
+                                                    <button
+                                                        onClick={() => setFormData(prev => ({ ...prev, editingLanguage: lang }))}
+                                                        className="ml-2 text-blue-400 hover:text-white"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            const newLangs = [...formData.languages];
+                                                            newLangs.splice(index, 1);
+                                                            setFormData(prev => ({ ...prev, languages: newLangs }));
+                                                        }}
+                                                        className="ml-2 text-gray-400 hover:text-white"
+                                                    >
+                                                        &times;
+                                                    </button>
+                                                </>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="flex mt-2">
+                                    <input
+                                        type="text"
+                                        id="new-lang-input"
+                                        className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-l-md text-white focus:border-blue-500 focus:ring-blue-500"
+                                        placeholder="Add a new language"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                const newLang = (e.target as HTMLInputElement).value.trim();
+                                                if (newLang && !formData.languages.includes(newLang)) {
+                                                    setFormData(prev => ({ ...prev, languages: [...prev.languages, newLang] }));
+                                                    (e.target as HTMLInputElement).value = '';
+                                                }
+                                            }
+                                        }}
+                                    />
+                                    <button
+                                        onClick={() => {
+                                            const input = document.getElementById('new-lang-input') as HTMLInputElement;
+                                            const newLang = input.value.trim();
+                                            if (newLang && !formData.languages.includes(newLang)) {
+                                                setFormData(prev => ({ ...prev, languages: [...prev.languages, newLang] }));
+                                                input.value = '';
+                                            }
+                                        }}
+                                        className="bg-blue-600 text-white px-4 py-2 rounded-r-md hover:bg-blue-700"
+                                    >
+                                        Add
+                                    </button>
+                                </div>
+                                <div className="mt-6">
+                                    <button
+                                        onClick={handleUpdateProfile}
+                                        className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 transition-colors"
+                                    >
+                                        Save Changes
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                        {activeSection === 'experience' && (
+                            <div className="bg-gray-800 rounded-lg p-6 mb-8">
+                                <h2 className="text-xl font-semibold mb-6">Work Experience</h2>
+                                <div className="mb-4">
+                                    {formData.experience.map((exp, index) => (
+                                        <div key={index} className="bg-gray-700 border border-gray-600 rounded-lg p-4 mb-2">
+                                            <div className="flex justify-between items-center">
+                                                <div>
+                                                    <div className="font-semibold text-white">{exp.title}</div>
+                                                    <div className="text-gray-400 text-sm">{exp.company}</div>
+                                                    <div className="text-gray-400 text-xs">{exp.startDate} - {exp.endDate}</div>
+                                                    <div className="text-gray-300 text-sm mt-1">{exp.description}</div>
+                                                </div>
+                                                <button
+                                                    onClick={() => {
+                                                        const newExp = [...formData.experience];
+                                                        newExp.splice(index, 1);
+                                                        setFormData(prev => ({ ...prev, experience: newExp }));
+                                                    }}
+                                                    className="ml-2 text-gray-400 hover:text-white"
+                                                >
+                                                    &times;
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="bg-gray-700 border border-gray-600 rounded-lg p-4 mb-4">
+                                    <div className="mb-2">
+                                        <input type="text" id="exp-title" placeholder="Job Title" className="w-full px-3 py-2 mb-2 bg-gray-800 border border-gray-600 rounded-md text-white" />
+                                        <input type="text" id="exp-company" placeholder="Company" className="w-full px-3 py-2 mb-2 bg-gray-800 border border-gray-600 rounded-md text-white" />
+                                        <input type="text" id="exp-start" placeholder="Start Date" className="w-full px-3 py-2 mb-2 bg-gray-800 border border-gray-600 rounded-md text-white" />
+                                        <input type="text" id="exp-end" placeholder="End Date" className="w-full px-3 py-2 mb-2 bg-gray-800 border border-gray-600 rounded-md text-white" />
+                                        <textarea id="exp-desc" placeholder="Description" className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-md text-white" />
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            const title = (document.getElementById('exp-title') as HTMLInputElement).value.trim();
+                                            const company = (document.getElementById('exp-company') as HTMLInputElement).value.trim();
+                                            const startDate = (document.getElementById('exp-start') as HTMLInputElement).value.trim();
+                                            const endDate = (document.getElementById('exp-end') as HTMLInputElement).value.trim();
+                                            const description = (document.getElementById('exp-desc') as HTMLTextAreaElement).value.trim();
+                                            if (title && company) {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    experience: [...prev.experience, { title, company, startDate, endDate, description }]
+                                                }));
+                                                (document.getElementById('exp-title') as HTMLInputElement).value = '';
+                                                (document.getElementById('exp-company') as HTMLInputElement).value = '';
+                                                (document.getElementById('exp-start') as HTMLInputElement).value = '';
+                                                (document.getElementById('exp-end') as HTMLInputElement).value = '';
+                                                (document.getElementById('exp-desc') as HTMLTextAreaElement).value = '';
+                                            }
+                                        }}
+                                        className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
+                                    >
+                                        Add Experience
+                                    </button>
+                                </div>
+                                <div className="mt-6">
+                                    <button
+                                        onClick={handleUpdateProfile}
+                                        className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 transition-colors"
+                                    >
+                                        Save Changes
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                         {/* Projects Tab */}
                         {activeTab === 'projects' && !projectsLoading && (
-                            <div className="bg-gray-800 rounded-lg p-6">
+                            <div className="bg-gray-800 rounded-lg p-6 mt-8">
                                 <div className="flex justify-between items-center mb-6">
                                     <h2 className="text-xl font-semibold">Projects Management</h2>
                                     <div className="flex gap-3">
@@ -1050,8 +1314,8 @@ const UserDashboard: React.FC = () => {
                         )}
 
                         {/* CV Management Tab */}
-                        {activeTab === 'cv' && !profileLoading && (
-                            <div className="bg-gray-800 rounded-lg p-6">
+                        {activeTab === 'cv' && (
+                            <div className="bg-gray-800 rounded-lg p-6 mt-8">
                                 <h2 className="text-xl font-semibold mb-6">CV Management</h2>
 
                                 <div className="mb-6">
@@ -1122,7 +1386,7 @@ const UserDashboard: React.FC = () => {
 
                         {/* Integrations Tab */}
                         {activeTab === 'integrations' && (
-                            <div className="bg-gray-800 rounded-lg p-6">
+                            <div className="bg-gray-800 rounded-lg p-6 mt-8">
                                 <h2 className="text-xl font-semibold mb-6">Integrations</h2>
 
                                 <div className="grid gap-6">
@@ -1291,7 +1555,7 @@ const UserDashboard: React.FC = () => {
 
                         {/* Account Settings Tab */}
                         {activeTab === 'account' && (
-                            <div className="bg-gray-800 rounded-lg p-6">
+                            <div className="bg-gray-800 rounded-lg p-6 mt-8">
                                 <h2 className="text-xl font-semibold mb-6">Account Settings</h2>
 
                                 <div className="mb-6">
