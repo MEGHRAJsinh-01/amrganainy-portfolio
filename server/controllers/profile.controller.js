@@ -3,6 +3,7 @@ const User = require('../models/user.model');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const fetch = require('node-fetch');
 
 // --- Image Upload Config ---
 // Configure multer storage for profile images
@@ -140,6 +141,98 @@ exports.getProfileByUsername = async (req, res) => {
                     email: user.email
                 }
             }
+        });
+    } catch (error) {
+        res.status(500).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+};
+
+/**
+ * Get aggregated profile with integrated data
+ */
+exports.getAggregatedProfile = async (req, res) => {
+    try {
+        const { username } = req.params;
+        const user = await User.findOne({ username });
+
+        if (!user) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'User not found'
+            });
+        }
+
+        const profile = await Profile.findOne({ userId: user._id });
+
+        if (!profile) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Profile not found'
+            });
+        }
+
+        // Fetch GitHub skills if GitHub username is configured
+        let githubSkills = { programmingLanguages: [], otherSkills: [] };
+        if (profile.socialLinks?.github) {
+            try {
+                const githubUsername = profile.socialLinks.github.split('/').pop();
+                const skillsResponse = await fetch(`${req.protocol}://${req.get('host')}/api/github/skills/${githubUsername}`);
+                if (skillsResponse.ok) {
+                    const skillsData = await skillsResponse.json();
+                    githubSkills = skillsData.data || githubSkills;
+                }
+            } catch (error) {
+                console.warn('Failed to fetch GitHub skills:', error.message);
+            }
+        }
+
+        // Fetch LinkedIn profile if configured
+        let linkedinProfile = null;
+        if (profile.socialLinks?.linkedin) {
+            try {
+                const linkedinUsername = profile.socialLinks.linkedin.split('/').pop();
+                const linkedinResponse = await fetch(`${req.protocol}://${req.get('host')}/api/linkedin/profile/${linkedinUsername}`);
+                if (linkedinResponse.ok) {
+                    linkedinProfile = await linkedinResponse.json();
+                }
+            } catch (error) {
+                console.warn('Failed to fetch LinkedIn profile:', error.message);
+            }
+        }
+
+        // Combine skills from profile and GitHub
+        const combinedSkills = {
+            programmingLanguages: [
+                ...new Set([
+                    ...(profile.skills || []),
+                    ...githubSkills.programmingLanguages
+                ])
+            ],
+            otherSkills: githubSkills.otherSkills
+        };
+
+        // Ensure URLs are absolute
+        const ensureFullUrl = (url) => {
+            if (!url) return url;
+            if (url.startsWith('http')) return url;
+            return `${req.protocol}://${req.get('host')}${url}`;
+        };
+
+        const aggregatedProfile = {
+            ...profile.toObject(),
+            skills: combinedSkills,
+            linkedinData: linkedinProfile,
+            profileImageUrl: ensureFullUrl(profile.profileImageUrl),
+            cvViewUrl: ensureFullUrl(profile.cvViewUrl),
+            cvDownloadUrl: ensureFullUrl(profile.cvDownloadUrl)
+        };
+
+        res.status(200).json({
+            status: 'success',
+            data: aggregatedProfile
         });
     } catch (error) {
         res.status(500).json({
@@ -341,6 +434,261 @@ exports.uploadCV = async (req, res) => {
                 cvFileUrl,
                 cvViewUrl: profile.cvViewUrl,
                 cvDownloadUrl: profile.cvDownloadUrl
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+};
+
+/**
+ * Update skills
+ */
+exports.updateSkills = async (req, res) => {
+    try {
+        const { skills } = req.body;
+
+        // Validate skills array
+        if (!Array.isArray(skills)) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Skills must be an array'
+            });
+        }
+
+        // Validate each skill object
+        for (const skill of skills) {
+            if (typeof skill !== 'object' || !skill.name) {
+                return res.status(400).json({
+                    status: 'error',
+                    message: 'Each skill must be an object with at least a name property'
+                });
+            }
+        }
+
+        // Update profile skills
+        const updatedProfile = await Profile.findOneAndUpdate(
+            { userId: req.user._id },
+            { skills },
+            {
+                new: true,
+                runValidators: true
+            }
+        );
+
+        if (!updatedProfile) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Profile not found'
+            });
+        }
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                profile: updatedProfile
+            }
+        });
+    } catch (error) {
+        console.error('Error updating skills:', error);
+        res.status(500).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+};
+
+/**
+ * Update languages
+ */
+exports.updateLanguages = async (req, res) => {
+    try {
+        const { languages } = req.body;
+
+        // Validate languages array
+        if (!Array.isArray(languages)) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Languages must be an array'
+            });
+        }
+
+        // Validate each language object
+        for (const language of languages) {
+            if (typeof language !== 'object' || !language.label) {
+                return res.status(400).json({
+                    status: 'error',
+                    message: 'Each language must be an object with at least a label property'
+                });
+            }
+        }
+
+        // Update profile languages
+        const updatedProfile = await Profile.findOneAndUpdate(
+            { userId: req.user._id },
+            { languages },
+            {
+                new: true,
+                runValidators: true
+            }
+        );
+
+        if (!updatedProfile) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Profile not found'
+            });
+        }
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                profile: updatedProfile
+            }
+        });
+    } catch (error) {
+        console.error('Error updating languages:', error);
+        res.status(500).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+};
+
+/**
+ * Update work experience
+ */
+exports.updateExperience = async (req, res) => {
+    try {
+        const { experience } = req.body;
+
+        // Validate experience array
+        if (!Array.isArray(experience)) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Experience must be an array'
+            });
+        }
+
+        // Validate each experience object
+        for (const exp of experience) {
+            if (typeof exp !== 'object' || !exp.title || !exp.company) {
+                return res.status(400).json({
+                    status: 'error',
+                    message: 'Each experience must be an object with at least title and company properties'
+                });
+            }
+        }
+
+        // Update profile experience
+        const updatedProfile = await Profile.findOneAndUpdate(
+            { userId: req.user._id },
+            { experience },
+            {
+                new: true,
+                runValidators: true
+            }
+        );
+
+        if (!updatedProfile) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Profile not found'
+            });
+        }
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                profile: updatedProfile
+            }
+        });
+    } catch (error) {
+        console.error('Error updating experience:', error);
+        res.status(500).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+};
+
+/**
+ * Get current user's skills
+ */
+exports.getCurrentUserSkills = async (req, res) => {
+    try {
+        const profile = await Profile.findOne({ userId: req.user._id });
+
+        if (!profile) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Profile not found'
+            });
+        }
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                skills: profile.skills || []
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+};
+
+/**
+ * Get current user's languages
+ */
+exports.getCurrentUserLanguages = async (req, res) => {
+    try {
+        const profile = await Profile.findOne({ userId: req.user._id });
+
+        if (!profile) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Profile not found'
+            });
+        }
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                languages: profile.languages || []
+            }
+        });
+    } catch (error) {
+        res.status(500).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+};
+
+/**
+ * Get current user's work experience
+ */
+exports.getCurrentUserExperience = async (req, res) => {
+    try {
+        const profile = await Profile.findOne({ userId: req.user._id });
+
+        if (!profile) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Profile not found'
+            });
+        }
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                experience: profile.experience || []
             }
         });
     } catch (error) {

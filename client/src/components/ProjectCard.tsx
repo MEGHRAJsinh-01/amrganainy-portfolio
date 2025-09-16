@@ -1,6 +1,5 @@
 import React from 'react';
 import { Project } from '../types';
-import DynamicText from './DynamicText';
 
 interface ProjectCardProps {
     project: Project;
@@ -100,7 +99,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, language, onVideoCli
             <div className="flex flex-col flex-1">
                 <div className="flex items-center justify-between mb-2">
                     <h3 className="text-white text-xl font-bold leading-normal flex-1 truncate mr-2">
-                        <DynamicText content={title} language={language} as="span" />
+                        {typeof title === 'string' ? title : (title[language] || title['en'] || 'Untitled Project')}
                     </h3>
                     <div className="flex items-center gap-2 flex-shrink-0">
                         {stars > 0 && (
@@ -118,7 +117,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, language, onVideoCli
                     </div>
                 </div>
                 <p className="text-gray-400 text-sm font-normal leading-relaxed flex-1">
-                    <DynamicText content={description} language={language} as="span" />
+                    {typeof description === 'string' ? description : (description[language] || description['en'] || 'No description available')}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                     {tags.map(tag => {

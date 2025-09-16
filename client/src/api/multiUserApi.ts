@@ -37,6 +37,14 @@ export const profileAPI = {
     getProfileByUsername: (username) => apiClient.get(`/profiles/username/${username}`),
     getCurrentUserProfile: () => apiClient.get('/profile/me'),
     updateProfile: (profileData) => apiClient.patch('/profile/me', profileData),
+    // Specific update endpoints
+    updateSkills: (skills) => apiClient.patch('/profile/me/skills', { skills }),
+    updateLanguages: (languages) => apiClient.patch('/profile/me/languages', { languages }),
+    updateExperience: (experience) => apiClient.patch('/profile/me/experience', { experience }),
+    // Specific read endpoints
+    getSkills: () => apiClient.get('/profile/me/skills'),
+    getLanguages: () => apiClient.get('/profile/me/languages'),
+    getExperience: () => apiClient.get('/profile/me/experience'),
     uploadProfileImage: (imageFile) => {
         const formData = new FormData();
         // Server expects the field name 'image'
@@ -63,6 +71,7 @@ export const profileAPI = {
 export const projectAPI = {
     getUserProjects: (userId) => apiClient.get(`/projects/user/${userId}`),
     getUserProjectsByUsername: (username) => apiClient.get(`/projects/username/${username}`),
+    getEnrichedUserProjects: (username) => apiClient.get(`/projects/enriched/${username}`),
     getCurrentUserProjects: () => apiClient.get('/projects/me'),
     getProject: (id) => apiClient.get(`/projects/${id}`),
     createProject: (projectData) => apiClient.post('/projects', projectData),
@@ -88,7 +97,10 @@ export const adminAPI = {
     createUser: (userData) => apiClient.post('/admin/users', userData),
     updateUser: (id, userData) => apiClient.patch(`/admin/users/${id}`, userData),
     deleteUser: (id) => apiClient.delete(`/admin/users/${id}`),
-    getStats: () => apiClient.get('/admin/stats')
+    getStats: () => apiClient.get('/admin/stats'),
+    clearGithubCache: () => apiClient.post('/cache/clear/github'),
+    clearSkillsCache: () => apiClient.post('/cache/clear/skills'),
+    clearLinkedInCache: () => apiClient.post('/cache/clear/linkedin'),
 };
 
 export default {

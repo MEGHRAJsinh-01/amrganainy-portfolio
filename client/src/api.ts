@@ -339,6 +339,44 @@ export const portfolioAPI = {
             console.error('Error translating text:', error);
             throw error;
         }
+    },
+
+    getAggregatedProfile: async (username: string) => {
+        try {
+            const response = await fetch(`${API_URL}/profiles/aggregated/${username}`, {
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to fetch aggregated profile');
+            }
+
+            const data = await response.json();
+            return data.data || data;
+        } catch (error) {
+            console.error('Error fetching aggregated profile:', error);
+            throw error;
+        }
+    },
+
+    getSkills: async (username: string) => {
+        try {
+            const response = await fetch(`${API_URL}/github/skills/${username}`, {
+                headers: { 'Content-Type': 'application/json' },
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Failed to fetch skills');
+            }
+
+            const data = await response.json();
+            return data.data || data;
+        } catch (error) {
+            console.error('Error fetching skills:', error);
+            throw error;
+        }
     }
 };
 

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { GitHubRepo, Portfolio } from '../types';
-import { ADMIN_PASSWORD, VISIBILITY_KEY, GITHUB_USERNAME } from '../constants';
-import { fetchGitHubRepos, clearGitHubCache, getVisibilitySettings, saveVisibilitySettings, isProjectVisible, clearSkillsCache, clearLinkedInCache } from '../githubService';
-import { authAPI, portfolioAPI } from '../api';
+import { ADMIN_PASSWORD, VISIBILITY_KEY, GITHUB_USERNAME, CLOUD_API_URL, LOCAL_API_URL } from '../constants';
+import { authAPI, portfolioAPI, projectAPI, adminAPI } from '../api/multiUserApi';
 import { ContactSection, SocialSection } from './admin-sections';
 
 interface AdminPanelProps {
@@ -32,11 +31,22 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
     const [contactUpdateMessage, setContactUpdateMessage] = useState({ text: '', type: '' });
     const [socialUpdateMessage, setSocialUpdateMessage] = useState({ text: '', type: '' });
     const [isLoadingPortfolio, setIsLoadingPortfolio] = useState(false);
+    const [userProjects, setUserProjects] = useState<any>({});
 
-    React.useEffect(() => {
+    useEffect(() => {
         if (isAuthenticated) {
             loadAllRepos();
             loadPortfolioData();
+            projectAPI.getCurrentUserProjects().then(response => {
+                const projects = response.data.data.projects;
+                const projectsMap = projects.reduce((acc, project) => {
+                    if (project.sourceId) {
+                        acc[project.sourceId] = project;
+                    }
+                    return acc;
+                }, {});
+                setUserProjects(projectsMap);
+            });
         }
     }, [isAuthenticated]);
 
@@ -96,19 +106,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
                 }
             }
 
-            const response = await fetch(`https://api.github.com/users/${username}/repos?sort=pushed&per_page=100`);
+            const isProd = import.meta.env.MODE === 'production';
+            const apiBaseUrl = isProd ? CLOUD_API_URL : LOCAL_API_URL;
+            const response = await fetch(`${apiBaseUrl}/github/admin/repos/${username}`);
             if (!response.ok) {
-                throw new Error(`GitHub API error: ${response.status}`);
+                throw new Error(`Failed to fetch GitHub repos: ${response.status}`);
             }
             const repos = await response.json();
 
-            // Filter out forks and private repos
-            const filteredRepos = repos.filter((repo: GitHubRepo) =>
-                !repo.fork && !repo.private && !repo.name.toLowerCase().includes('fork')
-            );
-
-            setAllRepos(filteredRepos);
-            setVisibilitySettings(getVisibilitySettings());
+            setAllRepos(repos);
         } catch (error) {
             console.error('Error loading repos:', error);
         } finally {
@@ -127,13 +133,47 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
         }
     };
 
-    const toggleVisibility = (repoName: string, repo?: GitHubRepo) => {
-        const newSettings = {
-            ...visibilitySettings,
-            [repoName]: !isProjectVisible(repoName, repo)
-        };
-        setVisibilitySettings(newSettings);
-        saveVisibilitySettings(newSettings);
+    const isProjectVisible = (repo: GitHubRepo) => {
+        const project = userProjects[repo.id];
+        if (project) {
+            return project.isVisibleInPortfolio;
+        }
+        // Default visibility for repos not yet imported
+        return repo.stargazers_count > 0 || repo.forks_count > 0;
+    };
+
+    const toggleVisibility = async (repo: GitHubRepo) => {
+        const project = userProjects[repo.id];
+        const isVisible = !isProjectVisible(repo);
+
+        if (project) {
+            // Project exists, so update its visibility
+            await projectAPI.updateProject(project._id, { isVisibleInPortfolio: isVisible });
+        } else {
+            // Project doesn't exist, so create it
+            const newProject = {
+                title: repo.name,
+                description: repo.description,
+                githubUrl: repo.html_url,
+                sourceType: 'github',
+                sourceId: repo.id,
+                isVisibleInPortfolio: isVisible,
+                technologies: repo.language ? [repo.language] : [],
+            };
+            await projectAPI.createProject(newProject);
+        }
+
+        // Refresh the projects
+        projectAPI.getCurrentUserProjects().then(response => {
+            const projects = response.data.data.projects;
+            const projectsMap = projects.reduce((acc, project) => {
+                if (project.sourceId) {
+                    acc[project.sourceId] = project;
+                }
+                return acc;
+            }, {});
+            setUserProjects(projectsMap);
+        });
     };
 
     const handleLogout = () => {
@@ -307,11 +347,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
                     <h1 className="text-2xl font-bold">Portfolio Admin Panel</h1>
                     <div className="flex gap-4">
                         <button
-                            onClick={() => {
-                                if (clearGitHubCache()) {
-                                    alert('GitHub cache cleared! The projects will reload with fresh data from GitHub.');
-                                    window.location.reload();
-                                }
+                            onClick={async () => {
+                                await adminAPI.clearGithubCache();
+                                alert('GitHub cache cleared!');
+                                window.location.reload();
                             }}
                             className="bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 transition-colors"
                             title="Clear GitHub cache and reload fresh data"
@@ -319,11 +358,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
                             Clear Projects Cache
                         </button>
                         <button
-                            onClick={() => {
-                                if (clearSkillsCache()) {
-                                    alert('Skills cache cleared! The skills section will reload with fresh data from GitHub.');
-                                    window.location.reload();
-                                }
+                            onClick={async () => {
+                                await adminAPI.clearSkillsCache();
+                                alert('Skills cache cleared!');
+                                window.location.reload();
                             }}
                             className="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors"
                             title="Clear skills cache and reload fresh data"
@@ -331,11 +369,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
                             Clear Skills Cache
                         </button>
                         <button
-                            onClick={() => {
-                                if (clearLinkedInCache()) {
-                                    alert('LinkedIn cache cleared! The bio will reload with fresh data from LinkedIn on the next visit.\n\nNOTE: LinkedIn API uses Apify, which is a paid service. Each profile fetch uses API credits, so please use this sparingly.');
-                                    window.location.reload();
-                                }
+                            onClick={async () => {
+                                await adminAPI.clearLinkedInCache();
+                                alert('LinkedIn cache cleared!');
+                                window.location.reload();
                             }}
                             className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
                             title="Clear LinkedIn cache and reload fresh data using Apify"
@@ -714,7 +751,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
                     ) : (
                         <div className="grid gap-4">
                             {allRepos.map((repo: GitHubRepo) => {
-                                const isVisible = isProjectVisible(repo.name, repo);
+                                const isVisible = isProjectVisible(repo);
 
                                 return (
                                     <div key={repo.id} className="bg-gray-800 border border-gray-700 rounded-lg p-6">
@@ -736,13 +773,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ onBackToPortfolio }) => {
                                                         {isVisible ? 'Visible' : 'Hidden'}
                                                     </span>
                                                     <div
-                                                        className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full ${isVisible ? 'bg-green-600' : 'bg-gray-600'
-                                                            }`}
-                                                        onClick={() => toggleVisibility(repo.name, repo)}
+                                                        className={`relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full ${isVisible ? 'bg-green-600' : 'bg-gray-600'}`}
+                                                        onClick={() => toggleVisibility(repo)}
                                                     >
                                                         <span
-                                                            className={`absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ease-in-out ${isVisible ? 'translate-x-6' : 'translate-x-0'
-                                                                }`}
+                                                            className={`absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform duration-200 ease-in-out ${isVisible ? 'translate-x-6' : 'translate-x-0'}`}
                                                         />
                                                     </div>
                                                 </label>

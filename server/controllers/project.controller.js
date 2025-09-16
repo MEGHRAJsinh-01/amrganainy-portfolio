@@ -3,6 +3,7 @@ const User = require('../models/user.model');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
+const fetch = require('node-fetch');
 
 // Configure multer storage
 const storage = multer.diskStorage({
@@ -34,6 +35,153 @@ exports.upload = multer({
         fileSize: 5 * 1024 * 1024 // 5MB limit
     }
 });
+
+/**
+ * Get enriched projects for a user (combines database projects with GitHub data)
+ */
+exports.getEnrichedUserProjects = async (req, res) => {
+    try {
+        const { username } = req.params;
+
+        if (!username) {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Username is required'
+            });
+        }
+
+        // Find user by username
+        const user = await User.findOne({ username });
+
+        if (!user) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'User not found'
+            });
+        }
+
+        // Get user's projects from database
+        let filter = { userId: user._id };
+
+        // Only show visible projects for public requests
+        if (!req.user || (req.user._id.toString() !== user._id.toString() && req.user.role !== 'admin')) {
+            filter.isVisibleInPortfolio = true;
+        }
+
+        const dbProjects = await Project.find(filter).sort({
+            isImported: -1,
+            order: 1,
+            featured: -1,
+            createdAt: -1,
+        });
+
+        // Try to fetch GitHub projects if user has GitHub URL
+        let githubProjects = [];
+        if (user.githubUrl) {
+            try {
+                const githubUsername = extractGitHubUsername(user.githubUrl);
+                if (githubUsername) {
+                    const githubResponse = await fetch(`https://api.github.com/users/${githubUsername}/repos?sort=updated&per_page=10`, {
+                        headers: {
+                            'User-Agent': 'Portfolio-App/1.0',
+                            'Accept': 'application/vnd.github.v3+json'
+                        }
+                    });
+
+                    if (githubResponse.ok) {
+                        const repos = await githubResponse.json();
+
+                        githubProjects = repos
+                            .filter(repo => !repo.fork && !repo.private)
+                            .map(repo => ({
+                                id: `github-${repo.id}`,
+                                title: { en: repo.name, de: repo.name },
+                                description: {
+                                    en: repo.description || 'No description available',
+                                    de: repo.description || 'Keine Beschreibung verfügbar'
+                                },
+                                tags: repo.language ? [repo.language] : [],
+                                liveUrl: repo.homepage || '',
+                                repoUrl: repo.html_url,
+                                imageUrl: '',
+                                lastUpdated: repo.updated_at,
+                                isFeatured: false,
+                                visible: true,
+                                source: 'github',
+                                stars: repo.stargazers_count,
+                                forks: repo.forks_count
+                            }));
+                    }
+                }
+            } catch (error) {
+                console.warn('Failed to fetch GitHub projects:', error.message);
+            }
+        }
+
+        // Combine database projects and GitHub projects
+        const allProjects = [
+            ...dbProjects.map(p => ({
+                id: p._id,
+                title: p.title || '',
+                description: p.description || '',
+                tags: Array.isArray(p.technologies) ? p.technologies : [],
+                liveUrl: p.projectUrl || '',
+                repoUrl: p.githubUrl || '',
+                imageUrl: p.imageUrl,
+                lastUpdated: p.updatedAt || p.createdAt,
+                isFeatured: !!p.featured,
+                visible: p.isVisibleInPortfolio,
+                source: 'database'
+            })),
+            ...githubProjects
+        ];
+
+        // Sort combined projects
+        allProjects.sort((a, b) => {
+            // Featured projects first
+            if (a.isFeatured && !b.isFeatured) return -1;
+            if (!a.isFeatured && b.isFeatured) return 1;
+
+            // Then by last updated
+            return new Date(b.lastUpdated) - new Date(a.lastUpdated);
+        });
+
+        res.status(200).json({
+            status: 'success',
+            results: allProjects.length,
+            data: {
+                projects: allProjects
+            }
+        });
+    } catch (error) {
+        console.error('Error in getEnrichedUserProjects:', error);
+        res.status(500).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+};
+
+/**
+ * Extract GitHub username from URL
+ */
+function extractGitHubUsername(url) {
+    if (!url) return null;
+
+    try {
+        const urlObj = new URL(url);
+        if (urlObj.hostname === 'github.com') {
+            const pathParts = urlObj.pathname.split('/').filter(p => p);
+            return pathParts[0] || null;
+        }
+    } catch (error) {
+        // Try regex fallback
+        const match = url.match(/github\.com\/([^\/]+)/i);
+        return match ? match[1] : null;
+    }
+
+    return null;
+}
 
 /**
  * Get all projects for a user by userId or username
@@ -76,11 +224,24 @@ exports.getUserProjects = async (req, res) => {
             createdAt: -1,
         });
 
+        const mappedProjects = projects.map(p => ({
+            id: p._id,
+            title: p.title || '',
+            description: p.description || '',
+            tags: Array.isArray(p.technologies) ? p.technologies : [],
+            liveUrl: p.projectUrl || '',
+            repoUrl: p.githubUrl || '',
+            imageUrl: p.imageUrl,
+            lastUpdated: p.updatedAt || p.createdAt,
+            isFeatured: !!p.featured,
+            visible: p.isVisibleInPortfolio
+        }));
+
         res.status(200).json({
             status: 'success',
-            results: projects.length,
+            results: mappedProjects.length,
             data: {
-                projects
+                projects: mappedProjects
             }
         });
     } catch (error) {
@@ -426,6 +587,58 @@ exports.reorderProjects = async (req, res) => {
         });
     } catch (error) {
         console.error('Error in reorderProjects:', error);
+        res.status(500).json({
+            status: 'error',
+            message: error.message
+        });
+    }
+};
+
+/**
+ * Update project visibility
+ */
+exports.updateProjectVisibility = async (req, res) => {
+    try {
+        const { projectId, isVisible } = req.body;
+
+        if (!projectId || typeof isVisible !== 'boolean') {
+            return res.status(400).json({
+                status: 'error',
+                message: 'Invalid request. projectId and isVisible boolean are required'
+            });
+        }
+
+        const project = await Project.findById(projectId);
+
+        if (!project) {
+            return res.status(404).json({
+                status: 'error',
+                message: 'Project not found'
+            });
+        }
+
+        // Check if user has permission to update this project
+        if (
+            req.user._id.toString() !== project.userId.toString() &&
+            req.user.role !== 'admin'
+        ) {
+            return res.status(403).json({
+                status: 'error',
+                message: 'You do not have permission to update this project'
+            });
+        }
+
+        project.isVisibleInPortfolio = isVisible;
+        await project.save();
+
+        res.status(200).json({
+            status: 'success',
+            data: {
+                project
+            }
+        });
+    } catch (error) {
+        console.error('Error in updateProjectVisibility:', error);
         res.status(500).json({
             status: 'error',
             message: error.message

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Project } from '../types';
-import { translations, API_URL } from '../constants';
-import { fetchGitHubRepos, getCachedRepos, setCachedRepos, transformGitHubRepoToProject } from '../githubService';
+import { translations, API_URL, GITHUB_USERNAME } from '../constants';
 import { projectAPI } from '../api/multiUserApi';
 import ProjectCard from './ProjectCard';
 import VideoModal from './VideoModal';
@@ -58,52 +57,19 @@ const Projects: React.FC<ProjectsProps> = ({ language, username }) => {
                 setIsLoading(true);
                 setError(null);
 
-                // If we're in a public user portfolio, load curated projects from backend by username
                 if (username) {
-                    const resp = await projectAPI.getUserProjectsByUsername(username);
-                    const list = (resp?.data?.data?.projects || resp?.data?.projects || resp?.data || []) as any[];
-                    // Map backend projects to frontend display model
-                    const mapped: Project[] = list
-                        .filter(p => (typeof p.visible === 'boolean' ? p.visible : true))
-                        .sort((a, b) => {
-                            const ao = typeof a.order === 'number' ? a.order : 0;
-                            const bo = typeof b.order === 'number' ? b.order : 0;
-                            return ao - bo;
-                        })
-                        .map(p => ({
-                            id: p._id || p.id,
-                            title: p.title || '',
-                            description: p.description || '',
-                            tags: Array.isArray(p.technologies) ? p.technologies : [],
-                            liveUrl: p.projectUrl || '',
-                            repoUrl: p.githubUrl || '',
-                            imageUrl: ensureFullImageUrl(p.imageUrl),
-                            lastUpdated: p.updatedAt || p.createdAt,
-                            isFeatured: !!p.featured
-                        }));
+                    // Use enriched endpoint that combines database and GitHub projects
+                    const resp = await projectAPI.getEnrichedUserProjects(username);
+                    const projects = (resp?.data?.data?.projects || resp?.data?.projects || resp?.data || []) as Project[];
+                    const mapped = projects.map(p => ({ ...p, imageUrl: ensureFullImageUrl(p.imageUrl) }));
                     setDynamicProjects(mapped);
-                    return;
+                } else {
+                    // For the main portfolio, use the enriched endpoint with the configured username
+                    const resp = await projectAPI.getEnrichedUserProjects(GITHUB_USERNAME);
+                    const projects = (resp?.data?.data?.projects || resp?.data?.projects || resp?.data || []) as Project[];
+                    const mapped = projects.map(p => ({ ...p, imageUrl: ensureFullImageUrl(p.imageUrl) }));
+                    setDynamicProjects(mapped);
                 }
-
-                // Otherwise, fallback to dynamic GitHub-based projects (legacy behavior)
-                let githubRepos = getCachedRepos();
-
-                if (!githubRepos) {
-                    githubRepos = await fetchGitHubRepos();
-                    setCachedRepos(githubRepos);
-                }
-
-                const transformedProjects = githubRepos
-                    .map(repo => transformGitHubRepoToProject(repo, language))
-                    .filter(project => project !== null) as Project[];
-
-                const sortedProjects = transformedProjects.sort((a, b) => {
-                    if (a.isFeatured && !b.isFeatured) return -1;
-                    if (!a.isFeatured && b.isFeatured) return 1;
-                    return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
-                });
-
-                setDynamicProjects(sortedProjects);
             } catch (err) {
                 console.error('Error loading projects:', err);
                 setError(err instanceof Error ? err.message : 'Unknown error');
@@ -116,7 +82,6 @@ const Projects: React.FC<ProjectsProps> = ({ language, username }) => {
         loadProjects();
     }, [language, username]);
 
-    // Use dynamic projects as the main projects list
     const allProjects = dynamicProjects;
 
     return (
@@ -130,7 +95,7 @@ const Projects: React.FC<ProjectsProps> = ({ language, username }) => {
                 {isLoading && (
                     <div className="flex justify-center items-center py-20">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400"></div>
-                        <span className="ml-4 text-gray-400">{username ? 'Loading projects...' : 'Loading projects from GitHub...'}</span>
+                        <span className="ml-4 text-gray-400">Loading projects...</span>
                     </div>
                 )}
 

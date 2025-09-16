@@ -73,6 +73,9 @@ const profileRoutes = require('./routes/profile.routes');
 const projectRoutes = require('./routes/project.routes');
 const filesRoutes = require('./routes/files.routes');
 const translationRoutes = require('./routes/translation.routes');
+const githubRoutes = require('./routes/github.routes');
+const linkedinRoutes = require('./routes/linkedin.routes');
+const cacheRoutes = require('./routes/cache.routes');
 // const adminRoutes = require('./routes/admin.routes');
 // const filesRoutes = require('./routes/files');
 
@@ -83,6 +86,9 @@ app.use('/api/profiles', profileRoutes); // Add alias for plural form
 app.use('/api/projects', projectRoutes);
 app.use('/api/files', filesRoutes);
 app.use('/api/translate', translationRoutes);
+app.use('/api/github', githubRoutes);
+app.use('/api/linkedin', linkedinRoutes);
+app.use('/api/cache', cacheRoutes);
 // app.use('/api/admin', adminRoutes);
 // app.use('/api/files', filesRoutes);
 
@@ -124,150 +130,6 @@ const initAdminUser = async () => {
 
 // Call admin user initialization
 // initAdminUser();
-
-// -------------------- LinkedIn API Proxy --------------------
-
-app.post('/api/linkedin-profile', async (req, res) => {
-    try {
-        console.log('LinkedIn profile API endpoint called');
-        const { profileUrl } = req.body;
-
-        if (!profileUrl) {
-            console.error('No profile URL provided');
-            return res.status(400).json({
-                error: 'Profile URL is required',
-                details: 'Please set your LinkedIn URL in your profile settings'
-            });
-        }
-
-        console.log('Fetching LinkedIn profile using username from URL:', profileUrl);
-
-        // Extract username from LinkedIn URL if it's a full URL
-        // URLs can be like: linkedin.com/in/username or linkedin.com/profile/view?id=...
-        let username = 'amr-elganainy'; // Default fallback
-
-        if (profileUrl.includes('/in/')) {
-            const match = profileUrl.match(/\/in\/([^\/\?]+)/);
-            if (match && match[1]) {
-                username = match[1];
-            }
-        }
-
-        console.log('Extracted LinkedIn username:', username);
-        const apiToken = config.services.apify.token;
-        if (!apiToken || apiToken === 'your_apify_token_here') {
-            console.error('API token missing or invalid');
-            return res.status(500).json({
-                error: 'Apify API token is missing or invalid in server environment'
-            });
-        }
-
-        // Using the LinkedIn Profile Detail actor by apimaestro with run-sync-get-dataset-items endpoint
-        // This endpoint directly returns the dataset items without needing to poll
-        const apiUrl = `https://api.apify.com/v2/acts/apimaestro~linkedin-profile-detail/run-sync-get-dataset-items?token=${apiToken}`;
-
-        console.log('Calling Apify API at:', apiUrl);
-
-        // Cache key and TTL
-        const cacheKey = `linkedin:${username}`;
-        const now = Date.now();
-        const TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-        // Serve from cache if fresh
-        const cached = app.locals.cacheStore.get(cacheKey);
-        if (cached && now - cached.timestamp < TTL) {
-            console.log('Serving LinkedIn profile from cache');
-            return res.json(cached.data);
-        }
-
-        // Start the actor run
-        const startRunResponse = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                "includeEmail": true,
-                "username": username
-            })
-        });
-
-        if (!startRunResponse.ok) {
-            const errorText = await startRunResponse.text();
-            console.error('Apify actor start error:', errorText);
-            return res.status(startRunResponse.status).json({
-                error: `Apify actor start failed: ${startRunResponse.status} ${startRunResponse.statusText}`,
-                details: errorText
-            });
-        }
-
-        // Parse the response
-        const runData = await startRunResponse.json();
-        console.log('Apify response:', JSON.stringify(runData).substring(0, 200));
-
-        // For run-sync-get-dataset-items endpoint, we get the data directly
-        if (Array.isArray(runData)) {
-            console.log('Direct data received, items count:', runData.length);
-            if (!runData || runData.length === 0) {
-                console.error('No LinkedIn profile data returned');
-                return res.status(404).json({ error: 'No LinkedIn profile data returned from Apify' });
-            }
-
-            // Cache and return the first profile (as we're only scraping one)
-            const payload = runData[0];
-            app.locals.cacheStore.set(cacheKey, { data: payload, timestamp: now });
-            console.log('Sending profile data to client (cached)');
-            return res.json(payload);
-        } else {
-            return res.status(500).json({
-                error: 'Unexpected response format from Apify API',
-                details: 'Expected an array of profile data'
-            });
-        }
-    } catch (error) {
-        console.error('Server error:', error);
-        res.status(500).json({
-            error: 'Server error processing LinkedIn profile request',
-            message: error.message
-        });
-    }
-});
-
-// -------------------- GitHub Repos Proxy (cached) --------------------
-app.get('/api/github-repos', async (req, res) => {
-    try {
-        const username = String(req.query.username || '').trim();
-        if (!username) {
-            return res.status(400).json({ error: 'Missing username' });
-        }
-
-        const cacheKey = `gh:repos:${username}`;
-        const now = Date.now();
-        const TTL = 24 * 60 * 60 * 1000; // 24 hours
-        const cached = app.locals.cacheStore.get(cacheKey);
-        if (cached && now - cached.timestamp < TTL) {
-            console.log('Serving GitHub repos from cache for', username);
-            return res.json(cached.data);
-        }
-
-        const ghRes = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}/repos?sort=pushed&per_page=100`, {
-            headers: {
-                'User-Agent': 'amrganainy-portfolio'
-            }
-        });
-        if (!ghRes.ok) {
-            const text = await ghRes.text();
-            console.error('GitHub API error:', ghRes.status, text);
-            return res.status(ghRes.status).json({ error: `GitHub API error: ${ghRes.status}` });
-        }
-        const data = await ghRes.json();
-        app.locals.cacheStore.set(cacheKey, { data, timestamp: now });
-        res.json(data);
-    } catch (err) {
-        console.error('GitHub proxy error:', err);
-        res.status(500).json({ error: 'Failed to fetch GitHub repos' });
-    }
-});
 
 // Start the server
 const server = http.createServer(app);

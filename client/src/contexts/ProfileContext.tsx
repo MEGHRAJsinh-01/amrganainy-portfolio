@@ -70,30 +70,11 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const apiUserRaw = response?.data?.data?.user || response?.data?.user;
             const apiProfileRaw = response?.data?.data?.profile || response?.data?.profile || response?.data;
 
-            // Normalize social links robustly and map legacy/new fields
+            // Simple normalization - just ensure basic fields are present
             const normalizeProfile = (raw: any) => {
                 if (!raw) return raw;
-                const rawSocial = raw.socialLinks || {};
-                const integrations = raw.integrations || {};
-
-                // Derive URLs from integrations only if not explicitly provided
-                const derivedGitHub = (!rawSocial.github && integrations.github?.username)
-                    ? `https://github.com/${integrations.github.username}`
-                    : undefined;
-                const derivedLinkedIn = (!rawSocial.linkedin && integrations.linkedin?.profileId)
-                    ? `https://www.linkedin.com/in/${integrations.linkedin.profileId}`
-                    : undefined;
-
-                const socialLinks = {
-                    ...rawSocial,
-                    github: rawSocial.github || raw.github || raw.githubUrl || derivedGitHub,
-                    linkedin: rawSocial.linkedin || raw.linkedin || raw.linkedinUrl || derivedLinkedIn,
-                    twitter: rawSocial.twitter || raw.twitter || raw.twitterUrl,
-                    website: rawSocial.website || raw.website || raw.websiteUrl
-                } as Record<string, string | undefined>;
 
                 return {
-                    // Start with raw to preserve unknown fields, then override with normalized
                     ...raw,
                     // Ensure id is available consistently
                     id: raw.id || raw._id || '',
@@ -103,23 +84,15 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     location: raw.location || '',
                     contactEmail: raw.contactEmail || '',
                     skills: Array.isArray(raw.skills) ? raw.skills : [],
-                    socialLinks,
-                    // Map new schema fields to legacy names for UI ease
-                    profileImage: raw.profileImage || raw.profileImageUrl,
-                    cvFile: raw.cvFile || raw.cvFileUrl,
-                    // Ensure both bio/about stay in sync for UI components using either
+                    socialLinks: raw.socialLinks || {},
+                    // Ensure both bio/about stay in sync for UI components
                     bio: raw.bio || raw.about || '',
                     about: raw.about || raw.bio || '',
-                    // Pass through known optional fields
-                    profileImageUrl: raw.profileImageUrl,
-                    cvFileUrl: raw.cvFileUrl,
-                    cvViewUrl: raw.cvViewUrl,
-                    cvDownloadUrl: raw.cvDownloadUrl,
                     languages: raw.languages || [],
                     theme: raw.theme || raw.settings?.theme,
                     isPublic: typeof raw.isPublic === 'boolean' ? raw.isPublic : true,
                     customDomain: raw.customDomain
-                } as any;
+                };
             };
 
             const apiProfile = (() => {
@@ -131,8 +104,9 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 }
                 return p;
             })();
-            setProfile(apiProfile as any);
-            return apiProfile as any;
+
+            setProfile(apiProfile);
+            return apiProfile;
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to load profile');
             return null;
@@ -149,27 +123,13 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const apiUserRaw = response?.data?.data?.user || response?.data?.user;
             const apiProfileRaw = response?.data?.data?.profile || response?.data?.profile || response?.data;
 
-            // Reuse the same normalization as in getProfile
+            // Simple normalization - just ensure basic fields are present
             const normalizeProfile = (raw: any) => {
                 if (!raw) return raw;
-                const rawSocial = raw.socialLinks || {};
-                const integrations = raw.integrations || {};
-                const derivedGitHub = (!rawSocial.github && integrations.github?.username)
-                    ? `https://github.com/${integrations.github.username}`
-                    : undefined;
-                const derivedLinkedIn = (!rawSocial.linkedin && integrations.linkedin?.profileId)
-                    ? `https://www.linkedin.com/in/${integrations.linkedin.profileId}`
-                    : undefined;
-                const socialLinks = {
-                    ...rawSocial,
-                    github: rawSocial.github || raw.github || raw.githubUrl || derivedGitHub,
-                    linkedin: rawSocial.linkedin || raw.linkedin || raw.linkedinUrl || derivedLinkedIn,
-                    twitter: rawSocial.twitter || raw.twitter || raw.twitterUrl,
-                    website: rawSocial.website || raw.website || raw.websiteUrl
-                } as Record<string, string | undefined>;
+
                 return {
-                    // Start with raw to preserve unknown fields, then override with normalized
                     ...raw,
+                    // Ensure id is available consistently
                     id: raw.id || raw._id || '',
                     userId: raw.userId || '',
                     name: raw.name || '',
@@ -177,20 +137,15 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     location: raw.location || '',
                     contactEmail: raw.contactEmail || '',
                     skills: Array.isArray(raw.skills) ? raw.skills : [],
-                    socialLinks,
-                    profileImage: raw.profileImage || raw.profileImageUrl,
-                    cvFile: raw.cvFile || raw.cvFileUrl,
+                    socialLinks: raw.socialLinks || {},
+                    // Ensure both bio/about stay in sync for UI components
                     bio: raw.bio || raw.about || '',
                     about: raw.about || raw.bio || '',
-                    profileImageUrl: raw.profileImageUrl,
-                    cvFileUrl: raw.cvFileUrl,
-                    cvViewUrl: raw.cvViewUrl,
-                    cvDownloadUrl: raw.cvDownloadUrl,
                     languages: raw.languages || [],
                     theme: raw.theme || raw.settings?.theme,
                     isPublic: typeof raw.isPublic === 'boolean' ? raw.isPublic : true,
                     customDomain: raw.customDomain
-                } as any;
+                };
             };
 
             const apiProfile = (() => {
@@ -201,7 +156,8 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 }
                 return p;
             })();
-            setProfile(apiProfile as any);
+
+            setProfile(apiProfile);
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to update profile');
             throw err;
@@ -215,9 +171,9 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setLoading(true);
             setError(null);
             const response = await profileAPI.uploadProfileImage(file);
-            const imageUrl = response?.data?.data?.profileImageUrl || response?.data?.profileImage || response?.data?.profileImageUrl;
-            // Update the profile with the new image URL (support both profileImage and profileImageUrl keys)
-            setProfile(prev => prev ? { ...prev, profileImage: imageUrl, profileImageUrl: imageUrl } as any : null);
+            const imageUrl = response?.data?.data?.profileImageUrl || response?.data?.profileImageUrl;
+            // Update the profile with the new image URL
+            setProfile(prev => prev ? { ...prev, profileImage: imageUrl, profileImageUrl: imageUrl } : null);
             return imageUrl;
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to upload profile image');
@@ -232,9 +188,9 @@ export const ProfileProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setLoading(true);
             setError(null);
             const response = await profileAPI.uploadCV(file);
-            const cvUrl = response?.data?.data?.cvFileUrl || response?.data?.cvFile || response?.data?.cvFileUrl;
+            const cvUrl = response?.data?.data?.cvFileUrl || response?.data?.cvFileUrl;
             // Update the profile with the new CV URL
-            setProfile(prev => prev ? { ...prev, cvFile: cvUrl, cvFileUrl: cvUrl } as any : null);
+            setProfile(prev => prev ? { ...prev, cvFile: cvUrl, cvFileUrl: cvUrl } : null);
             return cvUrl;
         } catch (err: any) {
             setError(err.response?.data?.message || 'Failed to upload CV');
