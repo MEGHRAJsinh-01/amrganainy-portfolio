@@ -629,10 +629,89 @@ exports.getCurrentUserSkills = async (req, res) => {
             });
         }
 
+        const combinedSkills = [];
+
+        // Add custom skills from profile first (these can override other sources)
+        if (Array.isArray(profile.skills)) {
+            profile.skills.forEach(skill => {
+                if (typeof skill === 'object' && skill.name) {
+                    combinedSkills.push({
+                        name: skill.name,
+                        source: skill.source || 'custom',
+                        isVisible: skill.isVisible !== false
+                    });
+                }
+            });
+        }
+
+        // Fetch GitHub skills
+        if (profile.socialLinks?.github) {
+            try {
+                const githubUsername = profile.socialLinks.github.split('/').pop();
+                if (githubUsername) {
+                    const skillsResponse = await fetch(`${req.protocol}://${req.get('host')}/api/github/skills/${githubUsername}`);
+                    if (skillsResponse.ok) {
+                        const skillsData = await skillsResponse.json();
+                        if (skillsData.data) {
+                            // Add programming languages (only if not already overridden by custom skill)
+                            (skillsData.data.programmingLanguages || []).forEach((skill) => {
+                                if (!combinedSkills.some(s => s.name.toLowerCase() === skill.toLowerCase())) {
+                                    combinedSkills.push({
+                                        name: skill,
+                                        source: 'github',
+                                        isVisible: true
+                                    });
+                                }
+                            });
+                            // Add other skills (only if not already overridden by custom skill)
+                            (skillsData.data.otherSkills || []).forEach((skill) => {
+                                if (!combinedSkills.some(s => s.name.toLowerCase() === skill.toLowerCase())) {
+                                    combinedSkills.push({
+                                        name: skill,
+                                        source: 'github',
+                                        isVisible: true
+                                    });
+                                }
+                            });
+                        }
+                    }
+                }
+            } catch (error) {
+                console.warn('Failed to fetch GitHub skills:', error);
+            }
+        }
+
+        // Fetch LinkedIn skills
+        if (profile.socialLinks?.linkedin) {
+            try {
+                const linkedinUsername = profile.socialLinks.linkedin.split('/').pop();
+                if (linkedinUsername) {
+                    const linkedinResponse = await fetch(`${req.protocol}://${req.get('host')}/api/linkedin/profile/${linkedinUsername}`);
+                    if (linkedinResponse.ok) {
+                        const profileData = await linkedinResponse.json();
+                        if (profileData.profile?.skills) {
+                            profileData.profile.skills.forEach((skill) => {
+                                const skillName = typeof skill === 'string' ? skill : skill.name;
+                                if (skillName && !combinedSkills.some(s => s.name.toLowerCase() === skillName.toLowerCase())) {
+                                    combinedSkills.push({
+                                        name: skillName,
+                                        source: 'linkedin',
+                                        isVisible: true
+                                    });
+                                }
+                            });
+                        }
+                    }
+                }
+            } catch (error) {
+                console.warn('Failed to fetch LinkedIn skills:', error);
+            }
+        }
+
         res.status(200).json({
             status: 'success',
             data: {
-                skills: profile.skills || []
+                skills: combinedSkills
             }
         });
     } catch (error) {

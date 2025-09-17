@@ -360,10 +360,10 @@ export const portfolioAPI = {
         }
     },
 
-    getSkills: async (username: string) => {
+    getSkills: async (): Promise<{ status: string; data: { skills: any[] } }> => {
         try {
-            const response = await fetch(`${API_URL}/github/skills/${username}`, {
-                headers: { 'Content-Type': 'application/json' },
+            const response = await fetch(`${API_URL}/profile/me/skills`, {
+                headers: authHeaders(),
             });
 
             if (!response.ok) {
@@ -372,7 +372,7 @@ export const portfolioAPI = {
             }
 
             const data = await response.json();
-            return data.data || data;
+            return data;
         } catch (error) {
             console.error('Error fetching skills:', error);
             throw error;
